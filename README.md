@@ -35,7 +35,7 @@ LineageOS, dan sudah ada target yang benar-benar boot — `mi8916` (Xiaomi Redmi
 | **[`HARDWARE-A37f.md`](HARDWARE-A37f.md)** | Inventaris hardware, dibaca langsung dari unit fisik lewat adb — bukan dari spesifikasi pabrikan |
 | [`kernel/msm8916-oppo-a37.dts`](kernel/msm8916-oppo-a37.dts) | Draf device tree kernel mainline, 470 baris |
 | [`kernel/panel/oppo-a37.sh`](kernel/panel/oppo-a37.sh) | Config generator driver panel untuk ketiga varian layar |
-| [`lk2nd/msm8916-oppo-a37.dts`](lk2nd/msm8916-oppo-a37.dts) | Entri bootloader lk2nd, `msm-id`/`board-id` dibaca dari perangkat |
+| [`lk2nd/`](lk2nd/) | Entri bootloader lk2nd sebagai patch untuk `msm8916-mtp.dts`, plus catatan koreksi desainnya. **Image sudah dibangun dan diverifikasi** |
 | [`android/A37-mainline.xml`](android/A37-mainline.xml) | Local manifest, 16 project, semua repo diverifikasi ada di `lineage-23.2` |
 | [`scripts/harvest-device-info.sh`](scripts/harvest-device-info.sh) | Skrip pembaca data hardware. Hanya membaca, tanpa root |
 
@@ -99,7 +99,7 @@ hari ini:
 | Riset kelayakan | selesai |
 | Inventaris hardware | selesai, diverifikasi di perangkat |
 | DTS kernel | draf ditulis, label eksternal diverifikasi, **belum dikompilasi** |
-| Entri lk2nd | draf ditulis, ID dibaca dari perangkat |
+| Entri lk2nd | **dibangun, isi DTB dan tabel QCDT diverifikasi** — belum di-flash |
 | Local manifest | ditulis, keberadaan semua repo diverifikasi |
 | Device tree Android | belum dibuat (Fase 9) |
 | Fase 0–10 | belum dijalankan |

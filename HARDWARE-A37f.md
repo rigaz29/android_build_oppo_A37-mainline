@@ -30,6 +30,22 @@ Skrip yang menghasilkannya: [`scripts/harvest-device-info.sh`](scripts/harvest-d
 /proc/device-tree/compatible     = "qcom,msm8916-mtp", "qcom,msm8916", "qcom,mtp"
 ```
 
+### Identitas dari SMEM (yang benar-benar dibandingkan bootloader)
+
+```
+/sys/devices/soc0/hw_platform          MTP
+/sys/devices/soc0/platform_subtype_id  0
+/sys/devices/soc0/platform_version     65536      (major 1, minor 0)
+/sys/devices/soc0/soc_id               206
+/sys/devices/soc0/revision             1.0
+/sys/devices/soc0/raw_id               1797
+```
+
+**`platform_subtype_id` = 0.** A37f mengaku MTP generik, tanpa subtype unik — berbeda dari
+Vivo Y21L yang memakai 13. Nomor proyek 15399 tidak muncul di SMEM sama sekali, jadi
+pencocokan DTB standar tidak melihatnya. Ini yang menentukan bentuk entri lk2nd; lihat
+[`lk2nd/README.md`](lk2nd/README.md).
+
 `0x3c27` = 15399 = nomor proyek OPPO untuk A37. Perhatikan `qcom,board-id` punya **tiga
 cell**, sedangkan format Qualcomm standar hanya dua (`<variant_id subtype_id>`) — OPPO
 menambahkan nomor proyek di cell ketiga. Ini penting untuk entri lk2nd.
