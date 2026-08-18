@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Local manifest - LineageOS 23.2 (Android 16) KERNEL MAINLINE untuk OPPO A37f.
+
+  Basis: LineageOS/android lineage-23.2 - OFFICIAL.
+
+      repo init -u https://github.com/LineageOS/android.git -b lineage-23.2
+
+  BUKAN kelanjutan dari A37-22. Jalur ini membuang seluruh kernel downstream
+  3.10.108 dan seluruh 282 blob vendor OPPO, lalu membangun ulang di atas
+  kernel Linux mainline 6.19 dengan HAL sumber terbuka. Device tree, kernel,
+  dan vendor tree dari repo A37-22 TIDAK dipakai sama sekali di sini.
+
+  Semua repo "mainline" di bawah adalah repo RESMI LineageOS - upaya ini sudah
+  pindah dari org pribadi me-cafebabe-aosp-mainline ke org LineageOS, dan
+  branch lineage-23.2 adalah yang hidup (vendor_mainline bahkan sudah 24.0).
+  Diverifikasi ada pada 18 Agustus 2026.
+
+  Perangkat rujukan: mi8916 (Redmi 2) di android_device_xiaomi_mi89xx-mainline,
+  satu-satunya target msm8916 mainline resmi.
+
+  Lihat PLAN-MAINLINE.md untuk alasan tiap baris.
+-->
+<manifest>
+
+  <remote name="gh"       fetch="https://github.com/" />
+  <remote name="mainline" fetch="https://github.com/msm8916-mainline/" />
+
+  <!-- ================================================================
+       A37f: device tree dan kernel
+       ================================================================
+       Device tree BELUM ADA - dibuat di Fase 9, meniru struktur
+       LineageOS/android_device_xiaomi_mi89xx-mainline/mi8916.
+
+       Kernel: fork msm8916-mainline/linux. Branch wip/msm8916/6.19 adalah
+       yang dipakai target mi8916 resmi. Fork sendiri diperlukan karena butuh
+       3 patch Android + DTS A37f + driver panel hasil generate - lihat
+       PLAN-MAINLINE.md Fase 8. -->
+
+  <project name="rigaz29/android_device_oppo_a37-mainline"
+           path="device/oppo/a37-mainline"
+           remote="gh" revision="refs/heads/lineage-23.2" upstream="lineage-23.2" />
+
+  <project name="rigaz29/kernel_mainline_msm8916"
+           path="kernel/mainline/msm8916-mainline"
+           remote="gh" revision="refs/heads/a37/6.19" upstream="a37/6.19" />
+
+  <!-- ================================================================
+       Stack mainline LineageOS
+       ================================================================
+       Inti jalur ini. device/mainline/common menyediakan matriks HAL yang
+       dipilih lewat variabel TARGET_* (mesa, drm_hwcomposer, tinyhal,
+       sensors-iio, libcamera, ...); qcom-common menyediakan soc/msm8916
+       lengkap dengan firmware Adreno a300, Venus 1.8, dan plumbing modem. -->
+
+  <project name="LineageOS/android_device_mainline_common"
+           path="device/mainline/common" remote="gh" />
+
+  <project name="LineageOS/android_device_mainline_qcom-common"
+           path="device/mainline/qcom-common" remote="gh" />
+
+  <project name="LineageOS/android_hardware_mainline_common"
+           path="hardware/mainline/common" remote="gh" />
+
+  <!-- qrtr, rmtfs, pd-mapper, tqftpserv, pil-squasher, hexagonrpc -->
+  <project name="LineageOS/android_hardware_mainline_qcom"
+           path="hardware/mainline/qcom" remote="gh" />
+
+  <!-- Fragment defconfig Android untuk kernel upstream murni -->
+  <project name="LineageOS/android_kernel_mainline_configs"
+           path="kernel/mainline/configs" remote="gh" />
+
+  <project name="LineageOS/android_external_linux-firmware-mainline"
+           path="external/linux-firmware-mainline" remote="gh" />
+
+  <!-- ================================================================
+       Grafis
+       ================================================================
+       Adreno 306 lewat Mesa freedreno - GLES 3.0 + Vulkan, tanpa blob.
+       Diverifikasi di perangkat: ro.opengles.version = 196608. -->
+
+  <project name="LineageOS/android_external_mesa"
+           path="external/mesa" remote="gh" />
+
+  <project name="LineageOS/android_prebuilts_mesa-build-dep"
+           path="prebuilts/mesa-build-dep" remote="gh" />
+
+  <project name="LineageOS/android_external_drm_hwcomposer-upstream"
+           path="external/drm_hwcomposer-upstream" remote="gh" />
+
+  <project name="LineageOS/android_external_libdisplay-info-upstream"
+           path="external/libdisplay-info-upstream" remote="gh" />
+
+  <project name="LineageOS/android_external_minigbm-upstream"
+           path="external/minigbm-upstream" remote="gh" />
+
+  <!-- ================================================================
+       Bootloader dan sensor
+       ================================================================
+       lk2nd dibangun sebagai bagian dari build Android
+       (build/tasks/lk2nd.mk di device/mainline/qcom-common).
+
+       sensors-iio dibutuhkan untuk LIS3DH - satu-satunya sensor A37f yang
+       punya driver mainline. Lihat HARDWARE-A37f.md. -->
+
+  <project name="LineageOS/android_external_lk2nd"
+           path="external/lk2nd" remote="gh" />
+
+  <project name="LineageOS/android_hardware_intel_sensors-iio"
+           path="hardware/intel/sensors-iio" remote="gh" />
+
+  <project name="LineageOS/android_prebuilts_bootmgr"
+           path="prebuilts/bootmgr" remote="gh" />
+
+</manifest>

@@ -1,0 +1,574 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2026, Ryan Bagas
+ *
+ * OPPO A37 / A37f (OPPO project 15399)
+ *
+ * Diturunkan dari DTS downstream:
+ *   arch/arm/boot/dts/qcom/msm8916-mtp-15399.dts
+ *   arch/arm/boot/dts/qcom/15399/*.dtsi
+ * (rigaz29/kernel_oppo_msm8939, kernel 3.10.108)
+ *
+ * Board ID downstream: qcom,board-id = <8 0 15399>  (MTP, subtype 15399)
+ *
+ * Diverifikasi terhadap unit fisik (A37f, LineageOS 22.2, kernel 3.10.108)
+ * lewat adb pada 18 Agustus 2026:
+ *   /proc/device-tree/qcom,board-id = 00000008 00000000 00003c27  -> <8 0 15399>
+ *   /proc/device-tree/qcom,msm-id   = 206/0, 248/0, 249/0, 250/0
+ *   panel terpasang  = "oppo15399boe ili9881c 720p video mode dsi panel"
+ *   layar            = 720x1280, density 280
+ *   RAM              = 1887 MB
+ *   i2c yang chip-nya benar-benar ada (driver ter-bind di kernel downstream):
+ *     0-0019 lis3dh   0-0030 mmc3416x   0-0053 apds9921
+ *     4-006b bq24196  5-0020 synaptics-s3203   5-0038 lm3630_bl   6-0060 ts4621
+ *   i2c yang dideklarasikan DT tapi chip-nya TIDAK ada:
+ *     ak8963, kxtj9, yas533, stk3x1x, mpu6050, ncp6335d, nfc-nci
+ */
+
+/dts-v1/;
+
+#include "msm8916-pm8916.dtsi"
+#include "msm8916-modem-qdsp6.dtsi"
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/interrupt-controller/irq.h>
+#include <dt-bindings/leds/common.h>
+
+/ {
+	model = "OPPO A37";
+	compatible = "oppo,a37", "qcom,msm8916";
+	chassis-type = "handset";
+
+	aliases {
+		mmc0 = &sdhc_1; /* eMMC */
+		mmc1 = &sdhc_2; /* SD card */
+		serial0 = &blsp_uart2;
+	};
+
+	chosen {
+		stdout-path = "serial0";
+	};
+
+	/*
+	 * Baterai varian "high": 4.4 V / 2580 mAh (qcom,fcc-mah).
+	 * Downstream juga punya varian 4.35 V / 2420 mAh — dipilih runtime lewat
+	 * batt-id-kohm (47k = varian ini). Tabel OCV di bawah dikonversi dari
+	 * qcom,pc-temp-ocv-lut kolom 25 degC pada
+	 * batterydata-oppo-4v4-2550mah-high-ATL.dtsi.
+	 *
+	 * TODO: cek batt-id resistor di unit asli; ada 4 pemasok sel
+	 * (ATL/LG/SDI/Sony) dengan tabel sedikit berbeda.
+	 */
+	battery: battery {
+		compatible = "simple-battery";
+		voltage-min-design-microvolt = <3400000>;
+		voltage-max-design-microvolt = <4400000>;
+		charge-full-design-microamp-hours = <2580000>;
+
+		ocv-capacity-celsius = <25>;
+		ocv-capacity-table-0 = <4325000 100>, <4293000 95>, <4251000 90>,
+			<4197000 85>, <4138000 80>, <4080000 75>,
+			<4033000 70>, <3982000 65>, <3941000 60>,
+			<3884000 55>, <3856000 50>, <3829000 45>,
+			<3813000 40>, <3796000 35>, <3779000 30>,
+			<3762000 25>, <3743000 20>, <3722000 16>,
+			<3702000 13>, <3697000 11>, <3694000 10>,
+			<3693000 9>, <3691000 8>, <3689000 7>,
+			<3685000 6>, <3670000 5>, <3605000 4>,
+			<3560000 3>, <3506000 2>, <3326000 1>,
+			<3000000 0>;
+	};
+
+	gpio-keys {
+		compatible = "gpio-keys";
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&gpio_keys_default>;
+
+		label = "GPIO Buttons";
+
+		button-volume-up {
+			label = "Volume Up";
+			gpios = <&tlmm 107 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_VOLUMEUP>;
+		};
+
+		/*
+		 * Downstream menaruh volume down di TLMM 108, bukan di PMIC resin
+		 * seperti kebanyakan device msm8916. Kalau ternyata tidak berfungsi,
+		 * hapus node ini dan aktifkan &pm8916_resin sebagai gantinya.
+		 */
+		button-volume-down {
+			label = "Volume Down";
+			gpios = <&tlmm 108 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_VOLUMEDOWN>;
+		};
+	};
+
+	/* qcom,platform-enable-gpio dari node mdss_dsi0 downstream */
+	reg_panel_vdd: regulator-panel-vdd {
+		compatible = "regulator-fixed";
+		regulator-name = "panel_vdd";
+
+		regulator-min-microvolt = <2800000>;
+		regulator-max-microvolt = <2800000>;
+
+		gpio = <&tlmm 97 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&panel_vdd_default>;
+	};
+
+	/*
+	 * qcom,platform-bklight-en-gpio — saklar daya untuk rangkaian backlight.
+	 * Driver lm3630a tidak meminta supply apa pun, jadi dipaksa always-on.
+	 */
+	reg_bl_vdd: regulator-bl-vdd {
+		compatible = "regulator-fixed";
+		regulator-name = "bl_vdd";
+
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+
+		gpio = <&tlmm 98 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		regulator-always-on;
+		regulator-boot-on;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&bl_en_default>;
+	};
+
+	/*
+	 * Downstream menghapus vdd-supply bawaan sdhc_2 dan menggantinya dengan
+	 * vdd-gpio-en = <&msm_gpio 116>, jadi kartu SD diberi daya lewat LDO
+	 * eksternal yang dikontrol GPIO — bukan pm8916_l11.
+	 */
+	reg_sd_vdd: regulator-sd-vdd {
+		compatible = "regulator-fixed";
+		regulator-name = "sd_vdd";
+
+		regulator-min-microvolt = <2950000>;
+		regulator-max-microvolt = <2950000>;
+
+		gpio = <&tlmm 116 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		startup-delay-us = <200>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&sd_vdd_en_default>;
+	};
+};
+
+/*
+ * BLSP1 QUP2 — sensor.
+ *
+ * Downstream mendaftarkan semua varian pemasok di bus ini, tapi pembacaan
+ * /sys/bus/i2c/devices di unit fisik menunjukkan hanya TIGA chip yang benar-benar
+ * ada (driver ter-bind):
+ *
+ *   0x19  LIS3DH     akselerometer   -> ADA di mainline (st,lis3dh-accel)
+ *   0x30  MMC3416x   magnetometer    -> BELUM ada di mainline
+ *   0x53  APDS9921   ALS + proximity -> BELUM ada di mainline
+ *
+ * Yang tercantum di DT downstream tapi TIDAK terpasang, jadi jangan ditulis di
+ * sini: ak8963 (0x0c), kxtj9 (0x1f), yas533 (0x2e), stk3x1x (0x48),
+ * mpu6050 (0x68).
+ */
+&blsp_i2c2 {
+	status = "okay";
+
+	accelerometer@19 {
+		compatible = "st,lis3dh-accel";
+		reg = <0x19>;
+
+		interrupt-parent = <&tlmm>;
+		interrupts = <115 IRQ_TYPE_EDGE_RISING>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&accel_int_default>;
+
+		vdd-supply = <&pm8916_l17>;
+		vddio-supply = <&pm8916_l6>;
+
+		/* TODO: ukur orientasi sensor terhadap layar di device */
+		/* mount-matrix = "1", "0", "0", "0", "1", "0", "0", "0", "1"; */
+	};
+
+	/*
+	 * TODO — kedua chip di bawah TERPASANG di device tapi belum punya driver
+	 * mainline. Node-nya dibiarkan dikomentari supaya DTB tetap bersih;
+	 * aktifkan setelah drivernya ditulis.
+	 *
+	 * MEMSIC MMC3416x. Mainline hanya punya mmc35240 (drivers/iio/magnetometer),
+	 * register map-nya berbeda — bukan sekadar tambah compatible.
+	 *
+	 * magnetometer@30 {
+	 *	compatible = "memsic,mmc3416x";
+	 *	reg = <0x30>;
+	 *	vdd-supply = <&pm8916_l17>;
+	 *	vddio-supply = <&pm8916_l6>;
+	 * };
+	 *
+	 * Avago/Broadcom APDS9921, ALS + proximity, IRQ di GPIO 113.
+	 * Mainline punya apds9300 dan apds9960 — keduanya bukan keluarga ini.
+	 *
+	 * light-sensor@53 {
+	 *	compatible = "avago,apds9921";
+	 *	reg = <0x53>;
+	 *	interrupt-parent = <&tlmm>;
+	 *	interrupts = <113 IRQ_TYPE_EDGE_FALLING>;
+	 *	vdd-supply = <&pm8916_l17>;
+	 *	vddio-supply = <&pm8916_l6>;
+	 * };
+	 */
+};
+
+/* BLSP1 QUP4 — charger */
+&blsp_i2c4 {
+	status = "okay";
+
+	bq24196: charger@6b {
+		compatible = "ti,bq24196";
+		reg = <0x6b>;
+
+		interrupt-parent = <&tlmm>;
+		interrupts = <62 IRQ_TYPE_EDGE_FALLING>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&chg_int_default>;
+
+		monitored-battery = <&battery>;
+		ti,system-minimum-microvolt = <3200000>;
+
+		usb_otg_vbus: usb-otg-vbus {
+			regulator-name = "usb_otg_vbus";
+			regulator-min-microvolt = <4900000>;
+			regulator-max-microvolt = <5200000>;
+		};
+	};
+};
+
+/* BLSP1 QUP5 — touchscreen dan backlight berbagi bus */
+&blsp_i2c5 {
+	status = "okay";
+
+	/*
+	 * Synaptics S3203. Node ini praktis identik dengan
+	 * msm8916-longcheer-l8150.dts: alamat i2c, GPIO interrupt, dan
+	 * vio-supply-nya sama persis. Yang berbeda hanya vdd-supply
+	 * (l8150 pakai LDO eksternal, A37 pakai pm8916_l17 langsung).
+	 */
+	touchscreen@20 {
+		compatible = "syna,rmi4-i2c";
+		reg = <0x20>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		interrupt-parent = <&tlmm>;
+		interrupts = <13 IRQ_TYPE_EDGE_FALLING>;
+
+		vdd-supply = <&pm8916_l17>;
+		vio-supply = <&pm8916_l6>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&tp_int_default>;
+
+		syna,startup-delay-ms = <10>;
+
+		rmi4-f01@1 {
+			reg = <0x1>;
+			syna,nosleep-mode = <1>;
+		};
+
+		rmi4-f12@12 {
+			reg = <0x12>;
+			syna,sensor-type = <1>; /* Touchscreen */
+			syna,no-pressure;
+		};
+
+		/*
+		 * A37 punya tiga tombol kapasitif di bawah layar. Di kernel downstream
+		 * tombol-tombol itu muncul sebagai input device terpisah
+		 * ("synaptics-s3203-kpd"), jadi kontrolernya memang melaporkannya
+		 * sendiri lewat fungsi F1A. Kalau ternyata chip tidak punya F1A, node
+		 * ini diabaikan begitu saja oleh driver RMI4 (fungsi dienumerasi dari
+		 * PDT), jadi aman dibiarkan.
+		 */
+		rmi4-f1a@1a {
+			reg = <0x1a>;
+		};
+	};
+
+	/*
+	 * TI LM3630. Downstream memakai compatible "lm3630_bl" (varian tanpa A),
+	 * tapi register map-nya sama dengan LM3630A yang ada di mainline.
+	 * bank-a-ctrl = 0x05 di downstream berarti kedua string LED digerakkan
+	 * bank A -> led-sources = <0 1>.
+	 */
+	backlight: backlight@38 {
+		compatible = "ti,lm3630a";
+		reg = <0x38>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		enable-gpios = <&tlmm 69 GPIO_ACTIVE_HIGH>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&bl_hwen_default>;
+
+		led@0 {
+			reg = <0>;
+			led-sources = <0 1>;
+			label = "lcd-backlight";
+			default-brightness = <200>;
+			max-brightness = <255>;
+		};
+	};
+};
+
+&blsp_uart2 {
+	status = "okay";
+	pinctrl-0 = <&blsp_uart2_console_default>;
+	pinctrl-1 = <&blsp_uart2_console_sleep>;
+	pinctrl-names = "default", "sleep";
+};
+
+&gpu {
+	status = "okay";
+};
+
+&mdss {
+	status = "okay";
+};
+
+&mdss_dsi0 {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&mdss_default>;
+	pinctrl-1 = <&mdss_sleep>;
+
+	/*
+	 * A37 punya TIGA varian panel yang dipilih lewat GPIO 109/114/119
+	 * (GPIO yang sama juga dipakai sebagai ID touchscreen):
+	 *   - BOE   ILI9881C  -> oppo,a37-boe-ili9881c   (primary)
+	 *   - Tianma NT35521S -> oppo,a37-tm-nt35521s
+	 *   - Truly  NT35521S -> oppo,a37-truly-nt35521s
+	 *
+	 * Semuanya 720x1280 video mode 60 Hz, fisik 62x110 mm, 4 lane.
+	 * Driver di-generate dari DTB downstream; lk2nd yang memilih DTB sesuai
+	 * panel terpasang, jadi tiap varian butuh DTS-nya sendiri.
+	 */
+	panel@0 {
+		compatible = "oppo,a37-boe-ili9881c";
+		reg = <0>;
+
+		backlight = <&backlight>;
+		power-supply = <&reg_panel_vdd>;
+		reset-gpios = <&tlmm 25 GPIO_ACTIVE_LOW>;
+
+		port {
+			panel_in: endpoint {
+				remote-endpoint = <&mdss_dsi0_out>;
+			};
+		};
+	};
+};
+
+&mdss_dsi0_out {
+	data-lanes = <0 1 2 3>;
+	remote-endpoint = <&panel_in>;
+};
+
+&mdss_dsi0_phy {
+	qcom,dsi-phy-regulator-ldo-mode;
+};
+
+&pm8916_bms {
+	status = "okay";
+
+	monitored-battery = <&battery>;
+	power-supplies = <&bq24196>;
+};
+
+/*
+ * Pengisian daya ditangani BQ24196 eksternal — downstream menyetel
+ * qcom,charging-disabled pada charger PMIC, jadi biarkan nonaktif.
+ */
+
+&pm8916_codec {
+	qcom,micbias-lvl = <2800>;
+	qcom,mbhc-vthreshold-low = <75 150 237 450 500>;
+	qcom,mbhc-vthreshold-high = <75 150 237 450 500>;
+	qcom,hphl-jack-type-normally-open;
+};
+
+&pm8916_rpm_regulators {
+	pm8916_l17: l17 {
+		regulator-min-microvolt = <2850000>;
+		regulator-max-microvolt = <2850000>;
+	};
+};
+
+&pm8916_usbin {
+	status = "okay";
+};
+
+&pm8916_vib {
+	status = "okay";
+};
+
+&sdhc_1 {
+	status = "okay";
+};
+
+&sdhc_2 {
+	status = "okay";
+
+	vmmc-supply = <&reg_sd_vdd>;
+	vqmmc-supply = <&pm8916_l12>;
+
+	cd-gpios = <&tlmm 38 GPIO_ACTIVE_LOW>;
+
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&sdc2_default &sdc2_cd_default>;
+	pinctrl-1 = <&sdc2_sleep &sdc2_cd_default>;
+};
+
+&sound {
+	audio-routing =
+		"AMIC1", "MIC BIAS Internal1",
+		"AMIC2", "MIC BIAS Internal2",
+		"AMIC3", "MIC BIAS Internal3";
+};
+
+&usb {
+	status = "okay";
+	dr_mode = "peripheral";
+	extcon = <&pm8916_usbin>;
+};
+
+&usb_hs_phy {
+	extcon = <&pm8916_usbin>;
+};
+
+&venus {
+	status = "okay";
+};
+
+&venus_mem {
+	status = "okay";
+};
+
+/* A37 hanya 802.11 b/g/n tanpa 5 GHz -> WCN3620 */
+&wcnss {
+	status = "okay";
+};
+
+&wcnss_iris {
+	compatible = "qcom,wcn3620";
+};
+
+&wcnss_mem {
+	status = "okay";
+};
+
+&tlmm {
+	/* TODO: verifikasi nomor GPIO interrupt LIS3DH dari skematik/downstream */
+	accel_int_default: accel-int-default-state {
+		pins = "gpio115";
+		function = "gpio";
+
+		drive-strength = <2>;
+		bias-disable;
+	};
+
+	bl_en_default: bl-en-default-state {
+		pins = "gpio98";
+		function = "gpio";
+
+		drive-strength = <2>;
+		bias-disable;
+	};
+
+	bl_hwen_default: bl-hwen-default-state {
+		pins = "gpio69";
+		function = "gpio";
+
+		drive-strength = <2>;
+		bias-disable;
+	};
+
+	chg_int_default: chg-int-default-state {
+		pins = "gpio62";
+		function = "gpio";
+
+		drive-strength = <2>;
+		bias-pull-up;
+	};
+
+	gpio_keys_default: gpio-keys-default-state {
+		pins = "gpio107", "gpio108";
+		function = "gpio";
+
+		drive-strength = <2>;
+		bias-pull-up;
+	};
+
+	mdss_default: mdss-default-state {
+		pins = "gpio25";
+		function = "gpio";
+
+		drive-strength = <8>;
+		bias-disable;
+	};
+
+	mdss_sleep: mdss-sleep-state {
+		pins = "gpio25";
+		function = "gpio";
+
+		drive-strength = <2>;
+		bias-pull-down;
+	};
+
+	panel_vdd_default: panel-vdd-default-state {
+		pins = "gpio97";
+		function = "gpio";
+
+		drive-strength = <2>;
+		bias-disable;
+	};
+
+	prox_int_default: prox-int-default-state {
+		pins = "gpio9";
+		function = "gpio";
+
+		drive-strength = <2>;
+		bias-pull-up;
+	};
+
+	sd_vdd_en_default: sd-vdd-en-default-state {
+		pins = "gpio116";
+		function = "gpio";
+
+		drive-strength = <2>;
+		bias-disable;
+	};
+
+	sdc2_cd_default: sdc2-cd-default-state {
+		pins = "gpio38";
+		function = "gpio";
+
+		drive-strength = <2>;
+		bias-pull-up;
+	};
+
+	tp_int_default: tp-int-default-state {
+		pins = "gpio13";
+		function = "gpio";
+
+		drive-strength = <2>;
+		bias-disable;
+	};
+};
