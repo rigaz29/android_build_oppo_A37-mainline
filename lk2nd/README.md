@@ -8,6 +8,8 @@ Status: **belum berhasil. lk2nd panic di A37f, penyebabnya belum diketahui.**
 | 2 | DTB tersendiri, QCDT 1 DTB, `DEBUG_FBCON=1` | **bootloop** |
 | 3 | node anak, QCDT dibatasi ke `msm8916-mtp.dtb`, + `gpio-keys` | **bootloop** |
 | diag | seperti 3, + `PANIC_REBOOT_MODE=NO_REBOOT` + `DEBUG=2` | belum dicoba |
+| 4 | board-id kustom `<8 0 15399>` + `LK2ND_DTBS`, **tanpa** fbcon | belum dicoba |
+| 5 | board-id kustom + `LK2ND_QCDTBS` (appended DTB dipertahankan) | belum dicoba |
 
 **Build 1 adalah keadaan paling aman** — perangkat masih bisa dijangkau lewat fastboot dan
 di-flash ulang, bukan bootloop.
@@ -54,6 +56,35 @@ build 3 juga dua (jumlah DTB dan `gpio-keys`). Keduanya tidak bisa dilacak.
 - **Appended DTB.** Bukan jalan keluar: diskusi [PR lk2nd#190](https://github.com/msm8916-mainline/lk2nd/pull/190)
   mencatat *"most MSM8916 devices require non-appended DTB to boot successfully; appended
   DTB configurations caused crashes"*.
+
+## Variabel yang sempat luput: appended DTB
+
+`LK2ND_DTBS` menyaring **dua-duanya** — `ADTBS` dan `QCDTBS`:
+
+```make
+ADTBS  := $(filter $(LK2ND_DTBS_FILTER),$(ADTBS))
+QCDTBS := $(filter $(LK2ND_DTBS_FILTER),$(QCDTBS))
+```
+
+Karena `msm8916-oppo-a37.dtb` maupun `msm8916-mtp.dtb` tidak ada di daftar `ADTBS`
+(isinya `msm8916-qrd-9.dtb` dan `msm8939-qrd-skuk.dtb`), build 2 dan 3 berakhir dengan
+**nol appended DTB** — dan itu satu-satunya hal yang mereka bagi. Build 1 punya 2 appended
+DTB dan tidak bootloop.
+
+`LK2ND_QCDTBS` mengganti `QCDTBS` saja tanpa menyentuh `ADTBS`, jadi bisa dipakai untuk
+menerapkan hack board-id sambil mempertahankan appended DTB.
+
+## Soal tanda tangan OPPO
+
+[`affggh/oppo_fake_signature`](https://github.com/affggh/oppo_fake_signature) menyasar
+**A57 dan R9s saja**, dan mensyaratkan downgrade aboot lebih dulu. Keduanya perangkat
+msm8937/msm8953 dari era penguncian bootloader — beda generasi dengan A37 (msm8916, awal
+2016), yang masuk kelompok [PR#190](https://github.com/msm8916-mainline/lk2nd/pull/190)
+dan bukan [PR#403](https://github.com/msm8916-mainline/lk2nd/pull/403) yang sudah di-merge.
+
+Bukti bahwa A37f tidak memverifikasi tanda tangan tetap kuat: LineageOS 22.2 di perangkat
+ini dibangun dari device tree yang tidak menandatangani boot.img sama sekali, dan ROM itu
+boot normal.
 
 ## Yang belum diketahui
 

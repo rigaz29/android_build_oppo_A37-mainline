@@ -1,0 +1,70 @@
+diff --git a/lk2nd/device/dts/msm8916/msm8916-oppo-a37.dts b/lk2nd/device/dts/msm8916/msm8916-oppo-a37.dts
+new file mode 100644
+index 0000000..c4b272a
+--- /dev/null
++++ b/lk2nd/device/dts/msm8916/msm8916-oppo-a37.dts
+@@ -0,0 +1,52 @@
++// SPDX-License-Identifier: BSD-3-Clause
++/*
++ * lk2nd/device/dts/msm8916/msm8916-oppo-a37.dts
++ * Jangan lupa tambahkan .dtb-nya ke QCDTBS di rules.mk direktori yang sama.
++ */
++
++#include <skeleton64.dtsi>
++#include <lk2nd.dtsi>
++
++/ {
++	/*
++	 * Nilai di bawah dibaca langsung dari unit A37f lewat adb (18 Agt 2026):
++	 *   /proc/device-tree/qcom,msm-id   -> 206/0, 248/0, 249/0, 250/0
++	 *   /proc/device-tree/qcom,board-id -> 00000008 00000000 00003c27
++	 */
++	qcom,msm-id = <QCOM_ID_MSM8916 0>,
++		      <QCOM_ID_MSM8216 0>,
++		      <QCOM_ID_MSM8116 0>,
++		      <QCOM_ID_MSM8616 0>;
++
++	/*
++	 * PERHATIAN: tiga cell, bukan dua. Format qcom standar adalah
++	 * <variant_id subtype_id>; OPPO menambahkan cell ketiga berisi nomor
++	 * proyek (15399 = 0x3c27) dan aboot bawaannya ikut membandingkan cell itu.
++	 * Kalau lk2nd ternyata hanya mencocokkan dua cell pertama, DTB ini akan
++	 * cocok dengan MTP msm8916 mana pun — periksa hasil pencocokannya saat
++	 * lk2nd pertama kali boot.
++	 */
++	qcom,board-id = <QCOM_BOARD_ID_MTP 0 15399>;
++};
++
++&lk2nd {
++	model = "OPPO A37";
++	compatible = "oppo,a37";
++	lk2nd,match-panel;
++
++	lk2nd,dtb-files = "msm8916-oppo-a37";
++
++	panel {
++		compatible = "oppo,a37-panel", "lk2nd,panel";
++
++		qcom,mdss_dsi_oppo15399boe_ili9881c_720p_video {
++			compatible = "oppo,a37-boe-ili9881c";
++		};
++		qcom,mdss_dsi_oppo15399tm_nt35521s_720p_video {
++			compatible = "oppo,a37-tm-nt35521s";
++		};
++		qcom,mdss_dsi_oppo15399truly_nt35521s_720p_video {
++			compatible = "oppo,a37-truly-nt35521s";
++		};
++	};
++};
+diff --git a/lk2nd/device/dts/msm8916/rules.mk b/lk2nd/device/dts/msm8916/rules.mk
+index ae38e9e..a919a16 100644
+--- a/lk2nd/device/dts/msm8916/rules.mk
++++ b/lk2nd/device/dts/msm8916/rules.mk
+@@ -25,6 +25,7 @@ QCDTBS += \
+ 	$(LOCAL_DIR)/msm8916-motorola-surnia.dtb \
+ 	$(LOCAL_DIR)/msm8916-mtp.dtb \
+ 	$(LOCAL_DIR)/msm8916-mtp-smb1360.dtb \
++	$(LOCAL_DIR)/msm8916-oppo-a37.dtb \
+ 	$(LOCAL_DIR)/msm8916-qrd-4.dtb \
+ 	$(LOCAL_DIR)/msm8916-qrd-5.dtb \
+ 	$(LOCAL_DIR)/msm8916-qrd-7+12.dtb \
