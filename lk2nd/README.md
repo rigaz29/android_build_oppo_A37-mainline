@@ -16,6 +16,52 @@ di-flash ulang, bukan bootloop.
 
 ---
 
+## Penyebab sebenarnya: board-id 3 cell tidak muat di QCDT
+
+Ditemukan dengan membongkar image lk2nd lama yang **terbukti berjalan** di A37f. DTB
+`msm8916-mtp` di dalamnya berisi:
+
+```
+qcom,board-id = <0x08 0x00 0x3a9d  0x08 0x00 0x3aa1  0x08 0x00 0x3abb  0x08 0x00 0x3c27>;
+```
+
+**Empat triplet dalam satu properti**, tiga cell per entri: 15005 (A31t), 15009 (Mirror 5s),
+15035 (A33), dan **15399 (A37)**. Bootloader OPPO membandingkan nomor proyek di cell ketiga.
+
+Format itu **tidak bisa diekspresikan lewat tabel QCDT**. `lk2nd/scripts/dtbTool`
+memasangkan cell dua-dua:
+
+```python
+x = iter(board_id)
+board_id = list(zip(x, x))
+```
+
+Pada properti 12 cell di atas hasilnya `(8,0) (0x3a9d,8) (0,0x3aa1) (8,0) (0x3abb,8) (0,0x3c27)`
+— pasangan yang tak bermakna. Entri A37 hancur.
+
+Karena itu **DTB harus di-append, bukan masuk QCDT**. Perbandingan header memastikannya:
+
+| Image | QCDT (`dt_size`) | Hasil di perangkat |
+|---|---|---|
+| referensi lama yang jalan | **0** | berjalan |
+| build 1 | 133.120 | lk2nd panic |
+| build board-id (QCDT 1 DTB) | 4.096 | bootloop |
+| build appended (baru) | **0** | belum diuji |
+
+Cara membangunnya:
+
+```bash
+make TOOLCHAIN_PREFIX=arm-none-eabi- lk2nd-msm8916 -j$(nproc) \
+     LK2ND_ADTBS="msm8916-mtp.dtb" LK2ND_QCDTBS= \
+     MKBOOTIMG_ARGS="--ramdisk_offset 0x02000000 --tags_offset 0x01e00000"
+```
+
+`LK2ND_QCDTBS=` kosong mematikan QCDT sepenuhnya; `LK2ND_ADTBS` menaruh DTB sebagai appended.
+`MKBOOTIMG_ARGS` menyamakan alamat dengan image referensi (dan kebetulan sama dengan yang
+dipakai `device/mainline/qcom-common` untuk msm8916).
+
+---
+
 ## Koreksi diagnosis
 
 Build 2 dan 3 dibangun di atas kesimpulan yang salah. Ceritanya perlu ditulis supaya tidak
