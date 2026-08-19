@@ -1,7 +1,18 @@
 # lk2nd untuk OPPO A37f
 
-Status: **build kedua. Percobaan flash pertama gagal, penyebabnya sudah ditemukan dan
-diperbaiki. Build ini belum diuji di perangkat.**
+Status: **build ketiga. Dua percobaan sebelumnya gagal — yang kedua menyebabkan bootloop.**
+
+| Build | Struktur | Hasil di perangkat |
+|---|---|---|
+| 1 | A37 sebagai node anak di `msm8916-mtp.dts`, QCDT 44 DTB | Tidak boot. Aboot OPPO ambil DTB lain, jatuh ke fastboot bawaannya |
+| 2 | A37 sebagai DTB tersendiri (board-id 3 cell), QCDT 1 DTB, `DEBUG_FBCON=1` | **Bootloop** |
+| 3 | A37 node anak di `msm8916-mtp.dts`, QCDT dibatasi ke `msm8916-mtp.dtb` saja | belum diuji |
+
+Build 3 menggabungkan dua pelajaran: struktur node anak yang dipakai
+[PR lk2nd#190](https://github.com/msm8916-mainline/lk2nd/pull/190) untuk sepuluh perangkat
+OPPO, **plus** pembatasan jumlah DTB yang diwajibkan komentar OPPO A57. Build 1 memakai
+struktur yang benar tapi dengan 44 DTB; build 2 membatasi DTB tapi mengubah strukturnya
+sekaligus. Build 3 hanya mengubah satu variabel dari build 1.
 
 ```
 build-lk2nd-msm8916/lk2nd.img   292.880 byte   (partisi boot 32 MB; muat di bawah offset 512 KB)
