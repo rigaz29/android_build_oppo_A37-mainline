@@ -149,8 +149,9 @@ Urutan debugging kalau tidak boot:
 2. Boot tapi diam → aktifkan `CONFIG_SERIAL_MSM_CONSOLE`, sambungkan UART lewat jack
    headset (msm8916 mengeksposnya di sana), atau baca `ramoops` lewat lk2nd
    (`lk2nd.pass-ramoops=zap`)
-3. Panic awal → cek `reserved-memory`; l8150 butuh penyesuaian alamat `wcnss_mem`/`mpss_mem`
-   karena firmware wcnss-nya tidak relokatable. Kalau A37f kena hal serupa, salin polanya
+3. Panic awal → cek `reserved-memory`. Ukuran `mpss_mem` sudah disetel dari reservasi
+   perangkat sendiri (`0x86800000`, 85 MB) dan `wcnss_mem` tidak perlu dipindah — A37f
+   tidak menunjukkan masalah relokasi yang memaksa l8150 memakai alamat tetap
 
 **Kriteria lulus:** kernel mencetak log sampai `Freeing unused kernel memory`, dan
 USB gadget muncul di host (`lsusb`).

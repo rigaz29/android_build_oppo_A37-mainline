@@ -366,6 +366,85 @@ mute, barulah perlu driver codec sungguhan.
 
 ---
 
+## Peta memori firmware
+
+Dibaca dari `/proc/device-tree/memory/` (nilai big-endian, sudah didekode):
+
+| Region | Alamat | Ukuran |
+|---|---|---|
+| `splash_region` | `0x83000000` | 20 MB |
+| `nvbackup_regions` | `0x85f00000` | 1 MB |
+| `external_image__region` | `0x86000000` | 8 MB |
+| **`modem_adsp_region`** | **`0x86800000`** | **85 MB** (`0x5500000`) |
+| **`pheripheral_region`** (wcnss) | **`0x8bd00000`** | **6 MB** |
+| `pstore_reserve_region` | `0x9ff00000` | 4 MB |
+| `mba_region` | dinamis | 2 MB |
+| `audio_region` | dinamis | 3,1 MB |
+| `venus_qseecom_region` | dinamis | 18 MB |
+
+**Ini menutup satu celah nyata di DTS.** `msm8916.dtsi` mainline memberi `mpss_mem` alamat
+`0x86800000` dengan ukuran **0** dan komentar "size is device-specific", sementara
+`msm8916-modem-qdsp6.dtsi` hanya menyalakannya. Jadi tiap device wajib menyetel sendiri —
+dan DTS di repo ini semula tidak melakukannya, yang artinya firmware modem tidak akan
+pernah dimuat. Sekarang sudah:
+
+```dts
+&mpss_mem {
+	reg = <0x0 0x86800000 0x0 0x5500000>;
+};
+```
+
+Di msm8916 satu Hexagon menjalankan modem dan ADSP sekaligus, jadi region gabungan
+`modem_adsp` memang seluruhnya milik mpss. Sebagai pembanding, `wt88047` memakai
+`0x5100000`.
+
+**wcnss tidak perlu diatur.** `msm8916.dtsi` memberinya `size = <0x600000>` tanpa alamat
+tetap sehingga dialokasikan dinamis, dan 6 MB itu persis sama dengan `pheripheral_region`
+milik A37f. Berbeda dari `msm8916-longcheer-l8150.dts` yang harus memindahkan
+`wcnss_mem` ke alamat tetap karena firmware-nya tidak relokatable — A37f tidak
+menunjukkan tanda-tanda masalah itu.
+
+Wilayah `pstore` di `0x9ff00000` cocok dengan `ramoops.mem_address` di cmdline, dan bisa
+dipakai lewat `lk2nd.pass-ramoops` untuk membaca log kernel yang mati sebelum sempat bicara.
+
+---
+
+## Baterai: varian terpastikan
+
+```
+/sys/class/power_supply/bms/battery_type = oppo_4400_2550mah_ATL
+```
+
+Persis varian yang tabel OCV-nya sudah dikonversi ke DTS
+(`batterydata-oppo-4v4-2550mah-high-ATL.dtsi`, 4,4 V, sel ATL). Dari empat pemasok yang
+didukung firmware (ATL, LG, SDI, Sony), unit ini memakai ATL — jadi tabel 31 titik di DTS
+memang cocok untuk perangkat ini.
+
+---
+
+## Backlight: LM3630A terkonfirmasi
+
+Register dibaca langsung dari chip di i2c-5 `0x38`:
+
+```
+0x00 CTRL   = 0xdf
+0x01 CONFIG = 0x19
+0x02 BOOST  = 0x38
+0x03 BRT_A  = 0x00     <- layar mati saat dibaca
+0x04 BRT_B  = 0xc8     <- 200 desimal
+0x05 I_A    = 0x14
+```
+
+Dua hal yang dipastikan sekaligus. Pertama, **peta registernya sama persis** dengan
+`REG_CTRL/REG_CONFIG/REG_BOOST/REG_BRT_A/REG_BRT_B/REG_I_A` di `lm3630a_bl.c` mainline.
+Kedua, `BRT_B = 200` sama dengan `ti,init-brt-led2 = <200>` di DTS downstream — nilainya
+cocok, bukan kebetulan.
+
+Driver mainline juga tidak memeriksa nomor revisi saat probe, jadi walau downstream
+menamainya `lm3630_bl` (varian tanpa A), `ti,lm3630a` akan bind.
+
+---
+
 ## Layout partisi
 
 Total eMMC 15028 MB, skema lama (bukan A/B, bukan dynamic partition).

@@ -431,6 +431,26 @@
 	qcom,dsi-phy-regulator-ldo-mode;
 };
 
+/*
+ * Ukuran mpss WAJIB ditetapkan per-device: msm8916.dtsi memberi alamat
+ * 0x86800000 dengan ukuran 0 ("size is device-specific"), dan
+ * msm8916-modem-qdsp6.dtsi hanya menyalakannya. Tanpa baris ini firmware modem
+ * tidak akan dimuat.
+ *
+ * Angkanya diambil dari reservasi perangkat sendiri, dibaca di
+ * /proc/device-tree/memory/modem_adsp_region@0: alamat 0x86800000, ukuran
+ * 0x5500000 (85 MB). Di msm8916 Hexagon menjalankan modem dan ADSP sekaligus,
+ * jadi satu region ini memang mencakup keduanya. Sebagai pembanding, wt88047
+ * memakai 0x5100000.
+ *
+ * wcnss tidak perlu diatur: msm8916.dtsi sudah memberinya `size = <0x600000>`
+ * tanpa alamat tetap (jadi dialokasikan dinamis), dan 6 MB itu persis sama
+ * dengan `pheripheral_region@0` milik A37f.
+ */
+&mpss_mem {
+	reg = <0x0 0x86800000 0x0 0x5500000>;
+};
+
 &pm8916_bms {
 	status = "okay";
 
