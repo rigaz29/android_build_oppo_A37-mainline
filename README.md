@@ -103,7 +103,7 @@ hari ini:
 | Riset kelayakan | selesai |
 | Inventaris hardware | selesai, diverifikasi di perangkat |
 | DTS kernel | draf ditulis, label eksternal diverifikasi, node touchscreen dikoreksi ke F11 dari pembacaan chip — **belum dikompilasi** |
-| Entri lk2nd | **percobaan flash pertama gagal** (bootloader OPPO ambil DTB yang salah dari 44 DTB). Diperbaiki dengan `LK2ND_DTBS=`; build kedua belum diuji |
+| Entri lk2nd | **lk2nd panic di A37f**, penyebab belum diketahui. Tiga build dicoba; build 1 paling aman (fastboot, bukan bootloop). Lihat [`lk2nd/README.md`](lk2nd/README.md) |
 | Local manifest | ditulis, keberadaan semua repo diverifikasi |
 | Device tree Android | belum dibuat (Fase 9) |
 | Fase 0–10 | belum dijalankan |

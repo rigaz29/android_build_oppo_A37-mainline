@@ -1,116 +1,79 @@
 # lk2nd untuk OPPO A37f
 
-Status: **build ketiga. Dua percobaan sebelumnya gagal — yang kedua menyebabkan bootloop.**
+Status: **belum berhasil. lk2nd panic di A37f, penyebabnya belum diketahui.**
 
-| Build | Struktur | Hasil di perangkat |
+| Build | Perubahan | Hasil di perangkat |
 |---|---|---|
-| 1 | A37 sebagai node anak di `msm8916-mtp.dts`, QCDT 44 DTB | Tidak boot. Aboot OPPO ambil DTB lain, jatuh ke fastboot bawaannya |
-| 2 | A37 sebagai DTB tersendiri (board-id 3 cell), QCDT 1 DTB, `DEBUG_FBCON=1` | **Bootloop** |
-| 3 | A37 node anak di `msm8916-mtp.dts`, QCDT dibatasi ke `msm8916-mtp.dtb` saja | belum diuji |
+| 1 | node anak di `msm8916-mtp.dts`, QCDT 44 DTB | fastboot OPPO, layar hitam — **tidak bootloop** |
+| 2 | DTB tersendiri, QCDT 1 DTB, `DEBUG_FBCON=1` | **bootloop** |
+| 3 | node anak, QCDT dibatasi ke `msm8916-mtp.dtb`, + `gpio-keys` | **bootloop** |
+| diag | seperti 3, + `PANIC_REBOOT_MODE=NO_REBOOT` + `DEBUG=2` | belum dicoba |
 
-Build 3 menggabungkan dua pelajaran: struktur node anak yang dipakai
-[PR lk2nd#190](https://github.com/msm8916-mainline/lk2nd/pull/190) untuk sepuluh perangkat
-OPPO, **plus** pembatasan jumlah DTB yang diwajibkan komentar OPPO A57. Build 1 memakai
-struktur yang benar tapi dengan 44 DTB; build 2 membatasi DTB tapi mengubah strukturnya
-sekaligus. Build 3 hanya mengubah satu variabel dari build 1.
-
-```
-lk2nd-a37f-mtp.img        294.928 byte  sha256 1dc2c92d8ec98fece7657097c994187077d11a65676fb684e1e3d40a49bceba0
-lk2nd-a37f-mtp-fbcon.img  294.928 byte  sha256 30829f66cdf677135c79f5807db8b95ebbf6d1e0eef3f9752e32330db8273299
-```
-
-Dua varian dibangun untuk mengisolasi `DEBUG_FBCON`, yang ikut ditambahkan di build 2 dan
-belum tersingkirkan sebagai penyebab bootloop. **Coba yang tanpa fbcon lebih dulu.**
+**Build 1 adalah keadaan paling aman** — perangkat masih bisa dijangkau lewat fastboot dan
+di-flash ulang, bukan bootloop.
 
 ---
 
-## Kenapa percobaan pertama gagal
+## Koreksi diagnosis
 
-Image pertama di-flash lewat EDL, lalu perangkat boot ke fastboot dengan layar menyisakan
-gambar charging OPPO. Sekilas itu terlihat seperti lk2nd yang berjalan tanpa OS. Ternyata
-bukan — dua perintah membuktikannya:
+Build 2 dan 3 dibangun di atas kesimpulan yang salah. Ceritanya perlu ditulis supaya tidak
+diulang.
 
+Setelah build 1, perangkat berakhir di fastboot dengan `fastboot getvar all` kosong dan
+`fastboot flash` ditolak `unknown command`. Dari situ disimpulkan lk2nd **tidak pernah
+dijalankan**, dan yang menjawab adalah aboot OPPO. Komentar OPPO A57 di
+`lk2nd/device/dts/msm8952/msm8940-oppo-a57.dts` tampak menjelaskannya:
+
+> *The bootloader will attempt to load the first dtb with matching msm id, which fails as
+> the board id does not match.*
+
+Build 2 dan 3 dibangun untuk memperbaiki itu — membatasi jumlah DTB. Keduanya **bootloop**.
+
+Kesalahannya baru terlihat di `lk2nd/project/lk2nd.mk`:
+
+```make
+PANIC_REBOOT_MODE ?= FASTBOOT_MODE
 ```
-> fastboot getvar all
-all:
-Finished. Total time: 0.002s
 
-> fastboot flash recovery twrp.img
-Sending 'recovery' (26684 KB)   OKAY
-Writing 'recovery'              FAILED (remote: 'unknown command')
-```
+**Saat lk2nd panic, dia reboot ke mode fastboot.** Jadi fastboot OPPO yang muncul setelah
+build 1 justru bukti lk2nd **berjalan lalu panic** — bukan bukti lk2nd tidak dimuat. Seluruh
+teori pemilihan DTB tidak menjelaskan apa pun, dan dua build berikutnya memperbaiki masalah
+yang tidak ada.
 
-lk2nd menerbitkan puluhan variabel (termasuk `lk2nd:model`, `lk2nd:panel`) dan mendukung
-`flash`. Yang menjawab di sini tidak punya variabel sama sekali dan menolak `flash` —
-itu **fastboot bawaan OPPO yang dipangkas**, dan artinya lk2nd tidak pernah dijalankan.
+Pelajaran metode: build 2 mengubah dua variabel sekaligus (struktur DTB dan jumlah DTB),
+build 3 juga dua (jumlah DTB dan `gpio-keys`). Keduanya tidak bisa dilacak.
 
-Penyebabnya sudah didokumentasikan lk2nd sendiri, di komentar
-`lk2nd/device/dts/msm8952/msm8940-oppo-a57.dts` untuk OPPO A57 — perangkat sezaman:
+## Yang sudah tersingkir
 
-> *Custom board id is required by the bootloader. The bootloader will attempt to load the
-> first dtb with matching msm id, which fails as the board id does not match. Add
-> `LK2ND_DTBS="msm8940-oppo-a57.dtb"` to your make cmdline.*
+- **Pemilihan DTB.** Jumlah DTB tidak mengubah hal mendasar; lk2nd tetap panic.
+- **Alamat boot image.** Header build 1 cocok persis dengan boot.img LineageOS 22.2 yang
+  jalan di perangkat: kernel `0x80008000`, ramdisk `0x81000000`, tags `0x80000100`.
+- **Verifikasi tanda tangan AVB.** Device tree LineageOS A37 tidak menandatangani boot.img
+  sama sekali (`BoardConfig.mk` hanya menyetel `--ramdisk_offset` dan `--tags_offset`), dan
+  ROM itu boot normal. Jadi bootloader A37f tidak memverifikasi — berbeda dari A57.
+- **Appended DTB.** Bukan jalan keluar: diskusi [PR lk2nd#190](https://github.com/msm8916-mainline/lk2nd/pull/190)
+  mencatat *"most MSM8916 devices require non-appended DTB to boot successfully; appended
+  DTB configurations caused crashes"*.
 
-Bootloader OPPO tidak melakukan pencocokan board-id yang benar. Dia mengambil **DTB
-pertama yang msm-id-nya cocok**, lalu gagal karena board-id-nya tidak sesuai. Build
-pertama kita memuat **44 DTB** dari semua perangkat msm8916 yang didukung lk2nd, jadi yang
-terambil hampir pasti bukan punya A37.
+## Yang belum diketahui
 
-Sekaligus ini menjelaskan kenapa `emmcdl` dipakai: komentar yang sama menyebut lk2nd tidak
-bisa di-flash lewat fastboot pada perangkat OPPO, dan harus lewat EDL. Kita sudah
-melakukannya dengan benar.
-
-## Perbaikan di build 3
-
-Dua sumber digabung:
-
-**Struktur dari PR lk2nd#190.** PR itu menambahkan sepuluh perangkat OPPO msm8916/msm8939,
-termasuk A37, sebagai **node anak di `msm8916-mtp.dts`** — tanpa DTB tersendiri dan tanpa
-board-id per-perangkat. Entri A37-nya cocok persis dengan yang diturunkan mandiri di repo
-ini: tiga nama node panel yang sama, dan `KEY_VOLUMEDOWN 108` / `KEY_VOLUMEUP 107` yang
-sama seperti hasil pembacaan `/proc/interrupts`.
-
-**Pembatasan DTB dari komentar A57.** Bangun hanya satu DTB, supaya "DTB pertama yang
-msm-id-nya cocok" pasti yang benar:
+**Kenapa lk2nd panic di A37f.** Untuk menjawabnya ada build diagnostik:
 
 ```bash
-make TOOLCHAIN_PREFIX=arm-none-eabi- lk2nd-msm8916 -j$(nproc) LK2ND_DTBS="msm8916-mtp.dtb"
+make TOOLCHAIN_PREFIX=arm-none-eabi- lk2nd-msm8916 -j$(nproc) \
+     LK2ND_DTBS="msm8916-mtp.dtb" DEBUG_FBCON=1 DEBUG=2 PANIC_REBOOT_MODE=NO_REBOOT
 ```
 
-Nilai `LK2ND_DTBS` cukup nama berkasnya saja tanpa subdirektori: `LOCAL_DIR` di
-`lk2nd/device/dts/rules.mk` sudah tertimpa oleh `rules.mk` anak saat filter dijalankan.
+`PANIC_REBOOT_MODE=NO_REBOOT` membuat lk2nd **berhenti** saat panic alih-alih reboot, dan
+`DEBUG_FBCON=1` mencetak lognya ke layar. Bootloop berubah jadi layar diam yang menampilkan
+baris terakhir sebelum crash — bisa difoto dan dibaca.
 
-Hasilnya QCDT berisi satu entri:
+## Entri device: datanya sudah terkonfirmasi
 
-```
-plat=206 variant=0x8 subtype=0
-```
-
-Cocok dengan yang dilaporkan SMEM perangkat: `soc_id=206`, `hw_platform=MTP`,
-`platform_subtype_id=0`.
-
-**Kenapa build 2 tidak bisa dilacak.** Build 2 mengubah dua hal sekaligus dari build 1 —
-struktur DTB *dan* jumlah DTB — lalu bootloop. Karena dua variabel berubah bersamaan,
-kegagalannya tidak bisa dikaitkan ke salah satunya. Build 3 hanya mengubah satu variabel
-dari build 1: jumlah DTB.
-
-**Appended DTB jangan dipakai.** Diskusi PR#190 mencatat: *"Mirror 5s and most MSM8916
-devices require non-appended DTB to boot successfully; appended DTB configurations caused
-crashes"*. Image lk2nd berbasis appended DTB (39 DTB, tanpa QCDT) karena itu tidak cocok
-untuk A37f.
-
-## Satu quirk A57 yang kemungkinan besar TIDAK berlaku
-
-Komentar yang sama menyebut A57 punya bootloader yang tidak bisa di-unlock, sehingga
-butuh tanda tangan AVB OPPO yang disalin dari boot image bawaan — dan bahwa
-`SIGN_BOOTIMG` generik **tidak** bekerja.
-
-Untuk A37f itu kemungkinan besar tidak jadi soal, dengan alasan yang kuat: perangkat ini
-sudah menjalankan **LineageOS 22.2 hasil build sendiri**. Kalau bootloader-nya memverifikasi
-tanda tangan, boot image custom itu tidak akan pernah boot. Jadi verifikasi tanda tangan
-sudah terbukti bukan penghalang di perangkat ini.
-
-Kalau ternyata build ini tetap tidak jalan, barulah tanda tangan jadi tersangka berikutnya.
+Terlepas dari kegagalan boot, isi entri A37 sudah tervalidasi dua kali. Diturunkan mandiri
+dari DTS downstream dan `/proc/interrupts` perangkat, lalu ternyata **cocok persis** dengan
+entri A37 di PR lk2nd#190: nomor proyek 15399, tiga nama node panel yang sama, dan
+`KEY_VOLUMEDOWN` di GPIO 108 / `KEY_VOLUMEUP` di GPIO 107 yang sama.
 
 ---
 

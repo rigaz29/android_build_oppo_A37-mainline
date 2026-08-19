@@ -86,8 +86,8 @@ ukurannya bukan nol.
 
 ## Fase 2 — lk2nd
 
-**Status: percobaan flash pertama GAGAL. Penyebab ditemukan dan diperbaiki; build kedua
-belum diuji.**
+**Status: BELUM LULUS. lk2nd panic di A37f dan penyebabnya belum diketahui — lihat
+[`lk2nd/README.md`](lk2nd/README.md) untuk apa saja yang sudah tersingkir.**
 
 Bootloader OPPO tidak bisa memuat kernel mainline langsung. lk2nd dipasang di partisi
 `boot`, lalu dia yang menyiapkan DTB dan menyerahkan kendali ke kernel.
