@@ -194,6 +194,76 @@ yang disintesis driver jadi tombol.
 
 ---
 
+## GPIO: dari pinctrl downstream, disilangkan dengan `/proc/interrupts`
+
+Grup pinctrl yang menyebut nomor pin secara eksplisit di `msm8916-pinctrl-15399.dtsi`:
+
+| Grup | GPIO | Keterangan |
+|---|---|---|
+| `lis3dh_int1_pin` | **34** | INT1 akselerometer — lihat catatan di bawah |
+| `sim2_cd_pin` | 56 | deteksi kartu SIM 2 |
+| `sim1_cd_pin` | 60 | deteksi kartu SIM 1 |
+| `cdc-pdm-lines` | 63 | audio PDM |
+| `hw_operator_gpio1/2/3` | 16, 17, 106 | identifikasi operator (khas OPPO) |
+| `hw_sub_gpio1/2` | 86, 111 | identifikasi varian papan |
+| `tp_gpio_id1/2/3_config` | 109, 114, 119 | ID touchscreen **dan** ID panel |
+| `usb-id-pin` | **110** | USB ID (OTG) |
+| `ext_buck_vsel` | 116 | lihat catatan |
+
+Pin lain yang dipakai DTS diambil dari properti eksplisit di board DTS, bukan dari
+pinctrl: touchscreen IRQ 13, panel reset 25, panel enable 97, backlight enable 98,
+LM3630 HWEN 69, charger IRQ 62, volume up/down 107/108, SD card-detect 38, proximity
+IRQ 113.
+
+### Yang benar-benar aktif, menurut `/proc/interrupts`
+
+```
+ 13:   3464   msm_tlmm_irq   synaptics-s3203
+288:      2   msm_tlmm_irq   7864900.sdhci cd
+330:      2   msm_tlmm_irq   apds9921
+428:      0   msm_tlmm_irq   msm_otg
+493:      2   msm_tlmm_irq   volume_up
+494:      2   msm_tlmm_irq   volume_down
+```
+
+Tiga hal yang diselesaikan daftar ini:
+
+**Volume down memang di TLMM.** Ada dua entri terpisah `volume_up` dan `volume_down`, dua-duanya
+di `msm_tlmm_irq` dan dua-duanya dengan hitungan bukan nol. Jadi A37f tidak memakai PMIC
+resin untuk volume down seperti kebanyakan perangkat msm8916 — `gpio-keys` dengan TLMM
+107 dan 108 sudah benar. (Bitmap `capabilities/key` juga mengonfirmasi: `gpio-keys`
+mendaftarkan kode 114 dan 115, sedangkan `qpnp_pon` mendaftarkan 114 dan 116.)
+
+**LIS3DH tidak punya interrupt sama sekali.** Tidak ada entri untuk lis3dh, dan node
+`st@19` downstream memang tidak punya properti `interrupts` — sensornya jalan polled
+(`st,init-interval = 200`). Pinnya ada di GPIO 34, tapi belum terbukti tersambung, jadi
+di DTS mainline interruptnya dibiarkan dikomentari.
+
+**OTG tersambung.** Ada entri `msm_otg` di TLMM, dan pin `usb-id-pin` di GPIO 110.
+Digabung dengan regulator OTG VBUS milik BQ24196, artinya OTG bisa diaktifkan setelah
+USB gadget terbukti jalan.
+
+### Orientasi akselerometer
+
+Node `st@19` downstream memberi pemetaan sumbunya:
+
+```
+st,axis-map-x = <1>;  st,negate-x;   ->  out_x = -raw_y
+st,axis-map-y = <0>;                 ->  out_y = +raw_x
+st,axis-map-z = <2>;                 ->  out_z = +raw_z
+```
+
+Diterjemahkan jadi `mount-matrix` mainline `"0","-1","0", "1","0","0", "0","0","1"`.
+Tetap perlu dicek sekali dengan memiringkan perangkat.
+
+### Catatan GPIO 116
+
+Berkas pinctrl menamainya `ext_buck_vsel` — sisa dari desain rujukan yang memakai buck
+NCP6335D. Buck itu tidak terpasang di A37f (drivernya tidak ter-bind). Yang berlaku adalah
+pemakaian di node `sdhc_2`: `vdd-gpio-en = <&msm_gpio 116 0x1>`, yaitu enable daya kartu SD.
+
+---
+
 ## Daya
 
 | Butir | Nilai |
@@ -242,7 +312,7 @@ akrobat itu: `system` 2816 MB cukup untuk build 64-bit-only tanpa blob, dan `use
 |---|---|
 | Wi-Fi | WCNSS "prima", firmware `CNSS-PR-2-0-1-1-c1-2-11-99836-1`, hanya 2,4 GHz |
 | Bluetooth | `vendor.qcom.bluetooth.soc = smd` (terpadu di WCNSS) |
-| Iris | belum dibaca langsung; b/g/n tanpa 5 GHz mengarah ke **WCN3620** — perlu konfirmasi |
+| Iris | **WCN3620** — didukung dua petunjuk: hanya 2,4 GHz, dan node `qcom,wcnss-wlan` punya `qcom,has-autodetect-xo` tanpa `qcom,has-48mhz-xo`. Belum dibaca dari ID chip |
 
 Di mainline keduanya ditangani `wcn36xx` + `wcnss_pil` + `btqca`, dengan varian iris
 dideklarasikan di DTS (`&wcnss_iris { compatible = "qcom,wcn3620"; }`).

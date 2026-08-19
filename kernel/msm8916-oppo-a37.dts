@@ -101,9 +101,10 @@
 		};
 
 		/*
-		 * Downstream menaruh volume down di TLMM 108, bukan di PMIC resin
-		 * seperti kebanyakan device msm8916. Kalau ternyata tidak berfungsi,
-		 * hapus node ini dan aktifkan &pm8916_resin sebagai gantinya.
+		 * Volume down di TLMM 108, bukan di PMIC resin seperti kebanyakan
+		 * device msm8916. Dikonfirmasi di perangkat: /proc/interrupts memuat
+		 * DUA entri msm_tlmm_irq bernama volume_up dan volume_down, keduanya
+		 * dengan hitungan bukan nol. Jadi jangan diganti &pm8916_resin.
 		 */
 		button-volume-down {
 			label = "Volume Down";
@@ -190,17 +191,36 @@
 		compatible = "st,lis3dh-accel";
 		reg = <0x19>;
 
-		interrupt-parent = <&tlmm>;
-		interrupts = <115 IRQ_TYPE_EDGE_RISING>;
-
-		pinctrl-names = "default";
-		pinctrl-0 = <&accel_int_default>;
-
 		vdd-supply = <&pm8916_l17>;
 		vddio-supply = <&pm8916_l6>;
 
-		/* TODO: ukur orientasi sensor terhadap layar di device */
-		/* mount-matrix = "1", "0", "0", "0", "1", "0", "0", "0", "1"; */
+		/*
+		 * Diturunkan dari st,axis-map-* di DTS downstream:
+		 *   axis-map-x = 1 + negate-x  ->  out_x = -raw_y
+		 *   axis-map-y = 0             ->  out_y = +raw_x
+		 *   axis-map-z = 2             ->  out_z = +raw_z
+		 * Perlu dicek sekali dengan memiringkan perangkat.
+		 */
+		mount-matrix = "0", "-1", "0",
+			       "1",  "0", "0",
+			       "0",  "0", "1";
+
+		/*
+		 * INT1 ada di GPIO 34 (grup pinctrl `lis3dh_int1_pin` di
+		 * msm8916-pinctrl-15399.dtsi), TAPI downstream tidak pernah
+		 * memakainya: node st@19 tidak punya properti `interrupts`, dan
+		 * /proc/interrupts di perangkat tidak memuat entri apa pun untuk
+		 * lis3dh. Sensor jalan polled (st,init-interval = 200 ms).
+		 *
+		 * Dibiarkan mati supaya bring-up pertama tidak tersandung IRQ yang
+		 * belum terbukti tersambung. st_accel jalan tanpa ini; aktifkan kalau
+		 * nanti butuh trigger data-ready.
+		 *
+		 * interrupt-parent = <&tlmm>;
+		 * interrupts = <34 IRQ_TYPE_EDGE_RISING>;
+		 * pinctrl-names = "default";
+		 * pinctrl-0 = <&accel_int_default>;
+		 */
 	};
 
 	/*
@@ -460,6 +480,27 @@
 		"AMIC3", "MIC BIAS Internal3";
 };
 
+/*
+ * OTG tampaknya tersambung, tapi sengaja belum diaktifkan.
+ *
+ * Bukti: grup pinctrl `usb-id-pin` downstream memakai GPIO 110, /proc/interrupts
+ * di perangkat memuat entri `msm_tlmm_irq  msm_otg`, dan charger BQ24196 punya
+ * regulator OTG VBUS (lihat node usb_otg_vbus di atas).
+ *
+ * Fase 3 hanya butuh USB gadget, jadi mode peripheral dulu supaya lebih sedikit
+ * yang bisa salah. Setelah gadget terbukti jalan, ganti dr_mode ke "otg" dan
+ * aktifkan blok di bawah — polanya mengikuti msm8916-asus-z00l.dts.
+ *
+ * usb_id: usb-id {
+ *	compatible = "linux,extcon-usb-gpio";
+ *	id-gpios = <&tlmm 110 GPIO_ACTIVE_HIGH>;
+ *	pinctrl-names = "default";
+ *	pinctrl-0 = <&usb_id_default>;
+ * };
+ *
+ * lalu:  extcon = <&pm8916_usbin>, <&usb_id>;
+ */
+
 &usb {
 	status = "okay";
 	dr_mode = "peripheral";
@@ -478,7 +519,11 @@
 	status = "okay";
 };
 
-/* A37 hanya 802.11 b/g/n tanpa 5 GHz -> WCN3620 */
+/*
+ * A37 hanya 802.11 b/g/n tanpa 5 GHz, dan node wcnss downstream punya
+ * `qcom,has-autodetect-xo` tanpa `qcom,has-48mhz-xo` — dua-duanya menunjuk
+ * WCN3620. Belum dipastikan dengan membaca ID chip.
+ */
 &wcnss {
 	status = "okay";
 };
@@ -492,13 +537,16 @@
 };
 
 &tlmm {
-	/* TODO: verifikasi nomor GPIO interrupt LIS3DH dari skematik/downstream */
+	/*
+	 * INT1 LIS3DH. Belum dirujuk siapa pun — lihat catatan di node
+	 * accelerometer@19. Nomor pin dari grup `lis3dh_int1_pin` downstream.
+	 */
 	accel_int_default: accel-int-default-state {
-		pins = "gpio115";
+		pins = "gpio34";
 		function = "gpio";
 
-		drive-strength = <2>;
-		bias-disable;
+		drive-strength = <6>;
+		bias-pull-down;
 	};
 
 	bl_en_default: bl-en-default-state {
