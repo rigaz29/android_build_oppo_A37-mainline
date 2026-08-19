@@ -86,7 +86,8 @@ ukurannya bukan nol.
 
 ## Fase 2 — lk2nd
 
-**Status: image sudah dibangun dan diverifikasi. Belum di-flash.**
+**Status: percobaan flash pertama GAGAL. Penyebab ditemukan dan diperbaiki; build kedua
+belum diuji.**
 
 Bootloader OPPO tidak bisa memuat kernel mainline langsung. lk2nd dipasang di partisi
 `boot`, lalu dia yang menyiapkan DTB dan menyerahkan kendali ke kernel.
@@ -94,32 +95,30 @@ Bootloader OPPO tidak bisa memuat kernel mainline langsung. lk2nd dipasang di pa
 ```bash
 git clone https://github.com/msm8916-mainline/lk2nd
 cd lk2nd
-git apply /path/to/lk2nd/0001-msm8916-mtp-tambahkan-OPPO-A37.patch
-make TOOLCHAIN_PREFIX=arm-none-eabi- lk2nd-msm8916 -j$(nproc)
-fastboot flash boot build-lk2nd-msm8916/lk2nd.img
+git apply /path/to/lk2nd/0001-msm8916-tambahkan-DTB-OPPO-A37.patch
+make TOOLCHAIN_PREFIX=arm-none-eabi- lk2nd-msm8916 -j$(nproc) \
+     LK2ND_DTBS="msm8916-oppo-a37.dtb" DEBUG_FBCON=1
 ```
 
-Build selesai dalam ~4 detik, tanpa peringatan. Hasilnya 426.000 byte — partisi `boot`
-A37f 32 MB, jadi muat sangat longgar.
+Flash lewat **EDL**, bukan fastboot — fastboot OPPO menolak perintah `flash`:
 
-**Satu koreksi desain terjadi di fase ini.** Draf awal membuat berkas DTB tersendiri untuk
-A37. Ternyata salah: perangkat melaporkan `platform_subtype_id = 0`, artinya dia MTP
-generik tanpa subtype unik. Ditambah `dtbTool` lk2nd membuang cell ketiga `qcom,board-id`
-(`<8 0 15399>` menjadi `(8, 0)`), DTB tersendiri itu bertabrakan langsung dengan
-`msm8916-mtp.dtb`. Perbaikannya: A37 jadi node anak di dalam `msm8916-mtp.dts` dan
-dibedakan saat runtime — pola yang sudah dipakai Marshall London, Vodafone Smart prime 6,
-dan dua perangkat Asus di berkas yang sama. Rincian dan cara verifikasinya di
-[`lk2nd/README.md`](lk2nd/README.md).
+```
+emmcdl.exe -p <port> -f <firehose> -b boot lk2nd-a37f.img
+```
 
-**Mekanisme pencocokannya sudah dikonfirmasi.** `lk2nd,match-panel` bergantung pada
-parameter `mdss_mdp.panel=` dari bootloader; dengan `adb root`, `/proc/cmdline` menunjukkan
-parameter itu memang dioper dan nama nodenya persis sama dengan yang ada di entri lk2nd.
+**Pelajaran dari percobaan pertama.** Build awal memuat 44 DTB dari semua perangkat
+msm8916 yang didukung lk2nd. Bootloader OPPO tidak mencocokkan board-id dengan benar — dia
+mengambil DTB pertama yang msm-id-nya cocok, gagal, lalu jatuh ke fastboot bawaannya.
+Gejalanya menipu: perangkat terlihat seperti masuk fastboot lk2nd, padahal
+`fastboot getvar all` kosong dan `flash` ditolak "unknown command" — dua hal yang tidak
+mungkin terjadi pada lk2nd. Perbaikannya `LK2ND_DTBS=` supaya hanya DTB A37 yang dibangun.
+Rinciannya di [`lk2nd/README.md`](lk2nd/README.md).
 
-**Kriteria lulus:** perangkat boot ke lk2nd, `fastboot devices` mengenalinya, dan layar
-atau log lk2nd menampilkan "OPPO A37".
+**Kriteria lulus:** layar menampilkan log lk2nd (`DEBUG_FBCON=1`), dan
+`fastboot getvar all` memuat baris `lk2nd:model = OPPO A37` serta `lk2nd:panel`.
 
-**Jalan pulang:** `fastboot flash boot boot-22.2.img` mengembalikan ROM lama. lk2nd hanya
-menempati partisi `boot`.
+**Jalan pulang:** flash balik `boot-22.2.img` lewat EDL. lk2nd hanya menempati partisi
+`boot`; `system`, `persist`, `modem`, dan `userdata` tidak tersentuh.
 
 ---
 
