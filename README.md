@@ -103,7 +103,7 @@ hari ini:
 | Riset kelayakan | selesai |
 | Inventaris hardware | selesai, diverifikasi di perangkat |
 | DTS kernel | draf ditulis, label eksternal diverifikasi, node touchscreen dikoreksi ke F11 dari pembacaan chip — **belum dikompilasi** |
-| Entri lk2nd | **lk2nd panic di A37f**, penyebab belum diketahui. Tiga build dicoba; build 1 paling aman (fastboot, bukan bootloop). Lihat [`lk2nd/README.md`](lk2nd/README.md) |
+| Entri lk2nd | **BERJALAN di perangkat.** Kuncinya appended DTB + `qcom,board-id` tiga cell `<8 0 15399>`; QCDT tidak bisa mengekspresikannya. Lihat [`lk2nd/README.md`](lk2nd/README.md) |
 | Local manifest | ditulis, keberadaan semua repo diverifikasi |
 | Device tree Android | belum dibuat (Fase 9) |
 | Fase 0–10 | belum dijalankan |

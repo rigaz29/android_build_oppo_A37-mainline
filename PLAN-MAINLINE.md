@@ -86,8 +86,9 @@ ukurannya bukan nol.
 
 ## Fase 2 — lk2nd
 
-**Status: BELUM LULUS. lk2nd panic di A37f dan penyebabnya belum diketahui — lihat
-[`lk2nd/README.md`](lk2nd/README.md) untuk apa saja yang sudah tersingkir.**
+**Status: LULUS. lk2nd berjalan di perangkat.** Kuncinya: DTB harus di-append (bukan QCDT)
+karena `qcom,board-id` A37f tiga cell `<8 0 15399>`, dan `dtbTool` memasangkan cell dua-dua
+sehingga triplet itu hancur di tabel QCDT. Rinciannya di [`lk2nd/README.md`](lk2nd/README.md).
 
 Bootloader OPPO tidak bisa memuat kernel mainline langsung. lk2nd dipasang di partisi
 `boot`, lalu dia yang menyiapkan DTB dan menyerahkan kendali ke kernel.

@@ -1,18 +1,48 @@
 # lk2nd untuk OPPO A37f
 
-Status: **belum berhasil. lk2nd panic di A37f, penyebabnya belum diketahui.**
+Status: **BERJALAN.** Tampilan lk2nd muncul di perangkat, tidak bootloop.
 
-| Build | Perubahan | Hasil di perangkat |
-|---|---|---|
-| 1 | node anak di `msm8916-mtp.dts`, QCDT 44 DTB | fastboot OPPO, layar hitam — **tidak bootloop** |
-| 2 | DTB tersendiri, QCDT 1 DTB, `DEBUG_FBCON=1` | **bootloop** |
-| 3 | node anak, QCDT dibatasi ke `msm8916-mtp.dtb`, + `gpio-keys` | **bootloop** |
-| diag | seperti 3, + `PANIC_REBOOT_MODE=NO_REBOOT` + `DEBUG=2` | belum dicoba |
-| 4 | board-id kustom `<8 0 15399>` + `LK2ND_DTBS`, **tanpa** fbcon | belum dicoba |
-| 5 | board-id kustom + `LK2ND_QCDTBS` (appended DTB dipertahankan) | belum dicoba |
+Image: [rilis `lk2nd-20260819-berhasil`](https://github.com/rigaz29/android_build_oppo_A37-mainline/releases/tag/lk2nd-20260819-berhasil)
+· `290.832` byte · sha256 `0408aff61757be872d5939d282374f63fabb343d225280551b2a8cf86f8e9e52`
 
-**Build 1 adalah keadaan paling aman** — perangkat masih bisa dijangkau lewat fastboot dan
-di-flash ulang, bukan bootloop.
+```bash
+make TOOLCHAIN_PREFIX=arm-none-eabi- lk2nd-msm8916 -j$(nproc) \
+     LK2ND_ADTBS="msm8916-mtp.dtb" LK2ND_QCDTBS=
+```
+
+| Parameter | Nilai |
+|---|---|
+| DTB | **appended**, QCDT dimatikan |
+| `qcom,board-id` | `<8 0 15399>` — tiga cell |
+| kernel / ramdisk / tags | `0x80008000` / `0x81000000` / `0x80000100` (bawaan lk2nd) |
+
+Flash lewat EDL, karena fastboot bawaan OPPO menolak `flash`:
+
+```
+emmcdl.exe -p <port> -f <firehose> -b boot lk2nd-a37f-adtb.img
+```
+
+## Riwayat: enam build sampai berhasil
+
+| Build | QCDT | Perubahan | Hasil |
+|---|---|---|---|
+| 1 | 133.120 | node anak di `msm8916-mtp.dts`, 44 DTB | lk2nd panic → reboot ke fastboot OPPO |
+| 2 | 4.096 | DTB tersendiri + `DEBUG_FBCON` | bootloop |
+| 3 | 4.096 | node anak + `gpio-keys` | bootloop |
+| 4, 5 | 4.096 | hack board-id lewat QCDT | bootloop |
+| adtb-match | 0 | appended + alamat disamakan dengan image lama | tidak bootloop, tampilan tidak muncul |
+| **adtb** | **0** | appended + alamat bawaan lk2nd | **berjalan** |
+
+Dua pelajaran yang mahal:
+
+**Alamat `ramdisk`/`tags` jangan disamakan dengan image referensi lama.** Varian
+`adtb-match` memakai `--ramdisk_offset 0x02000000 --tags_offset 0x01e00000` seperti image
+lama yang jalan — hasilnya tidak bootloop tapi tampilan lk2nd tidak pernah muncul. Bawaan
+lk2nd (`0x81000000` / `0x80000100`) yang benar.
+
+**Jangan ubah lebih dari satu variabel per flash.** Build 2 mengubah struktur DTB *dan*
+jumlah DTB; build 3 mengubah jumlah DTB *dan* menambah `gpio-keys`. Tidak satu pun bisa
+dilacak, dan tiap siklus menyita perangkat.
 
 ---
 
