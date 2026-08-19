@@ -15,9 +15,12 @@ struktur yang benar tapi dengan 44 DTB; build 2 membatasi DTB tapi mengubah stru
 sekaligus. Build 3 hanya mengubah satu variabel dari build 1.
 
 ```
-build-lk2nd-msm8916/lk2nd.img   292.880 byte   (partisi boot 32 MB; muat di bawah offset 512 KB)
-sha256                          0422755fd2799c8df38e38b8d89f2d684a9c70187a065187967838c819f95d1a
+lk2nd-a37f-mtp.img        294.928 byte  sha256 1dc2c92d8ec98fece7657097c994187077d11a65676fb684e1e3d40a49bceba0
+lk2nd-a37f-mtp-fbcon.img  294.928 byte  sha256 30829f66cdf677135c79f5807db8b95ebbf6d1e0eef3f9752e32330db8273299
 ```
+
+Dua varian dibangun untuk mengisolasi `DEBUG_FBCON`, yang ikut ditambahkan di build 2 dan
+belum tersingkirkan sebagai penyebab bootloop. **Coba yang tanpa fbcon lebih dulu.**
 
 ---
 
@@ -57,41 +60,44 @@ Sekaligus ini menjelaskan kenapa `emmcdl` dipakai: komentar yang sama menyebut l
 bisa di-flash lewat fastboot pada perangkat OPPO, dan harus lewat EDL. Kita sudah
 melakukannya dengan benar.
 
-## Perbaikannya
+## Perbaikan di build 3
 
-Dua perubahan, keduanya mengikuti pola A57:
+Dua sumber digabung:
 
-**1. A37 kembali jadi DTB tersendiri.** Sebelumnya A37 dipindah menjadi node anak di dalam
-`msm8916-mtp.dts` untuk menghindari tabrakan slot QCDT. Untuk perangkat OPPO itu tidak
-bisa — kita justru butuh DTB terpisah supaya bisa dibangun sendirian.
+**Struktur dari PR lk2nd#190.** PR itu menambahkan sepuluh perangkat OPPO msm8916/msm8939,
+termasuk A37, sebagai **node anak di `msm8916-mtp.dts`** — tanpa DTB tersendiri dan tanpa
+board-id per-perangkat. Entri A37-nya cocok persis dengan yang diturunkan mandiri di repo
+ini: tiga nama node panel yang sama, dan `KEY_VOLUMEDOWN 108` / `KEY_VOLUMEUP 107` yang
+sama seperti hasil pembacaan `/proc/interrupts`.
 
-**2. Bangun hanya DTB itu.**
+**Pembatasan DTB dari komentar A57.** Bangun hanya satu DTB, supaya "DTB pertama yang
+msm-id-nya cocok" pasti yang benar:
 
 ```bash
-make TOOLCHAIN_PREFIX=arm-none-eabi- lk2nd-msm8916 -j$(nproc) \
-     LK2ND_DTBS="msm8916-oppo-a37.dtb" DEBUG_FBCON=1
+make TOOLCHAIN_PREFIX=arm-none-eabi- lk2nd-msm8916 -j$(nproc) LK2ND_DTBS="msm8916-mtp.dtb"
 ```
 
-Nilai `LK2ND_DTBS` cukup nama berkasnya saja, tanpa subdirektori: `LOCAL_DIR` di
-`lk2nd/device/dts/rules.mk` sudah tertimpa oleh `rules.mk` anak saat filter dijalankan,
-jadi prefiksnya sudah `lk2nd/device/dts/msm8916/`.
+Nilai `LK2ND_DTBS` cukup nama berkasnya saja tanpa subdirektori: `LOCAL_DIR` di
+`lk2nd/device/dts/rules.mk` sudah tertimpa oleh `rules.mk` anak saat filter dijalankan.
 
-Hasilnya tabel QCDT berisi tepat satu DTB:
+Hasilnya QCDT berisi satu entri:
 
 ```
-magic=QCDT version=2 entries=4
-  plat=206 variant=0x8 subtype=0  offset=2048    <- MSM8916
-  plat=248 variant=0x8 subtype=0  offset=2048    <- MSM8216
-  plat=249 variant=0x8 subtype=0  offset=2048    <- MSM8116
-  plat=250 variant=0x8 subtype=0  offset=2048    <- MSM8616
+plat=206 variant=0x8 subtype=0
 ```
 
-Empat entri, tapi semuanya menunjuk **offset yang sama** — satu DTB didaftarkan di bawah
-empat msm-id yang dilaporkan A37f. Jadi "DTB pertama yang cocok msm-id" pasti punya kita.
+Cocok dengan yang dilaporkan SMEM perangkat: `soc_id=206`, `hw_platform=MTP`,
+`platform_subtype_id=0`.
 
-**3. `DEBUG_FBCON=1` ditambahkan** supaya lk2nd mencetak lognya ke layar. Build pertama
-tidak memakainya, sehingga tidak ada umpan balik visual sama sekali — layar hanya
-menyisakan gambar charging dari aboot.
+**Kenapa build 2 tidak bisa dilacak.** Build 2 mengubah dua hal sekaligus dari build 1 —
+struktur DTB *dan* jumlah DTB — lalu bootloop. Karena dua variabel berubah bersamaan,
+kegagalannya tidak bisa dikaitkan ke salah satunya. Build 3 hanya mengubah satu variabel
+dari build 1: jumlah DTB.
+
+**Appended DTB jangan dipakai.** Diskusi PR#190 mencatat: *"Mirror 5s and most MSM8916
+devices require non-appended DTB to boot successfully; appended DTB configurations caused
+crashes"*. Image lk2nd berbasis appended DTB (39 DTB, tanpa QCDT) karena itu tidak cocok
+untuk A37f.
 
 ## Satu quirk A57 yang kemungkinan besar TIDAK berlaku
 
@@ -115,9 +121,8 @@ sudo apt install gcc-arm-none-eabi device-tree-compiler libfdt-dev python3
 
 git clone https://github.com/msm8916-mainline/lk2nd
 cd lk2nd
-git apply /path/to/lk2nd/0001-msm8916-tambahkan-DTB-OPPO-A37.patch
-make TOOLCHAIN_PREFIX=arm-none-eabi- lk2nd-msm8916 -j$(nproc) \
-     LK2ND_DTBS="msm8916-oppo-a37.dtb" DEBUG_FBCON=1
+git apply /path/to/lk2nd/0001-msm8916-mtp-tambahkan-OPPO-A37.patch
+make TOOLCHAIN_PREFIX=arm-none-eabi- lk2nd-msm8916 -j$(nproc) LK2ND_DTBS="msm8916-mtp.dtb"
 ```
 
 Diuji dengan `arm-none-eabi-gcc` 13.2.1 di Ubuntu 24.04, terhadap lk2nd commit `3b7896f`.
@@ -137,10 +142,10 @@ print("entri:", num, "| offset unik:", set(r[-2] for r in rows), "(harus satu ni
 EOF
 
 # 2. Node A37 ada di DTB
-dtc -I dtb -O dts build-lk2nd-msm8916/lk2nd/device/dts/msm8916/msm8916-oppo-a37.dtb
+dtc -I dtb -O dts build-lk2nd-msm8916/lk2nd/device/dts/msm8916/msm8916-mtp.dtb | grep -A20 oppo-a37
 
 # 3. Muat di bawah offset 512 KB (supaya boot.img Android bisa menyusul di atasnya)
-#    292.880 < 524.288  OK
+#    294.928 < 524.288  OK
 ```
 
 ## Cara flash
@@ -149,7 +154,7 @@ Fastboot OPPO menolak `flash`, jadi EDL adalah satu-satunya jalan — dan itu me
 disarankan komentar A57.
 
 ```
-emmcdl.exe -p <port> -f <firehose> -b boot lk2nd-a37f.img
+emmcdl.exe -p <port> -f <firehose> -b boot lk2nd-a37f-mtp.img
 ```
 
 **Jalan pulang:** `emmcdl.exe -p <port> -f <firehose> -b boot boot-22.2.img` mengembalikan
@@ -158,7 +163,7 @@ ROM lama. lk2nd hanya menempati partisi `boot` dan tidak menyentuh `system`, `pe
 
 ## Yang harus diperiksa saat boot pertama
 
-Kali ini ada umpan balik visual karena `DEBUG_FBCON=1`:
+Untuk varian `-fbcon`, log lk2nd tercetak di layar:
 
 1. **Layar menampilkan log lk2nd** — kalau ini muncul, lk2nd jalan
 2. `fastboot getvar all` menampilkan baris `lk2nd:*`. Yang paling penting:
