@@ -71,6 +71,64 @@ panel berbeda, layar akan mati total sampai DTB yang cocok dipilih lk2nd.
 
 ---
 
+## Cmdline dari bootloader
+
+Dibaca dengan `adb root` (build `userdebug`, jadi tidak perlu `su`). Serial diredaksi.
+
+```
+sched_enable_hmp=1 androidboot.hardware=qcom ehci-hcd.park=3
+androidboot.bootdevice=7824900.sdhci lpm_levels.sleep_disabled=1
+ramoops.mem_address=0x9ff00000 ramoops.mem_size=0x400000 ramoops.record_size=0x40000
+ramoops.console_size=0x100000 ramoops.pmsg_size=0x40000 ramoops.dump_oops=1 ramoops.ecc=1
+androidboot.selinux=permissive androidboot.init_fatal_reboot_target=recovery
+hung_task_panic=1 androidboot.emmc=true androidboot.serialno=<diredaksi>
+androidboot.baseband=msm
+mdss_mdp.panel=1:dsi:0:qcom,mdss_dsi_oppo15399boe_ili9881c_720p_video:1:none
+inside_ldo androidboot.startupmode=pwrkey androidboot.mode=reboot lk_version=V1.0
+```
+
+Dua hal penting di sini:
+
+**`mdss_mdp.panel=` dioper.** Nama node panelnya persis sama dengan yang dipakai entri
+lk2nd, jadi `lk2nd,match-panel` punya bahan untuk bekerja. Ini menutup satu-satunya
+pertanyaan terbuka di Fase 2.
+
+**Wilayah ramoops sudah disiapkan bootloader** di `0x9ff00000`, 4 MB, dengan console 1 MB.
+Berguna untuk Fase 3: kalau kernel mainline mati sebelum sempat bicara, log terakhirnya
+bisa diambil dari sana lewat `lk2nd.pass-ramoops`.
+
+---
+
+## Touchscreen: dibaca langsung dari chip
+
+Diverifikasi dengan `i2cget` ke `/dev/i2c-5` alamat `0x20`. Page Description Table
+halaman 0, dipindai turun dari `0xE9` dengan entri 6 byte:
+
+| Alamat | Fungsi | Query | Ctrl | Data | Arti |
+|---|---|---|---|---|---|
+| `0xE9` | **F34** | `0x87` | `0x4d` | — | flash / pembaruan firmware |
+| `0xE3` | **F01** | `0x90` | `0x51` | `0x13` | kendali perangkat |
+| `0xDD` | **F11** | `0xad` | `0x57` | `0x15` | sensor 2D |
+| `0xD7` | `0x00` | | | | akhir PDT |
+
+Query F01 byte 11–16 mengeja `s3203_` dalam ASCII (`0x73 0x33 0x32 0x30 0x33 0x5f`).
+**Chip menjawab lewat protokol RMI4** — dukungan mainline untuk touchscreen A37f bukan
+lagi asumsi, tapi hasil pengukuran.
+
+Dua konsekuensi untuk DTS:
+
+**Fungsi sensornya F11, bukan F12.** `msm8916-longcheer-l8150.dts` yang jadi rujukan
+memakai F12, jadi bagian ini tidak bisa disalin mentah. Ikutannya: properti
+`syna,no-pressure` dibuang, karena hanya `rmi_f12.c` yang membacanya.
+
+**Tidak ada F1A, dan itu masuk akal.** F11 Ctrl6–9 melaporkan sensor maksimum
+**1100 × 1900**, sedangkan DTS downstream menyebut area panel **1100 × 1745**. Selisih Y
+1745–1900 adalah strip tiga tombol kapasitif di bawah layar. Jadi tombolnya memang bagian
+dari permukaan sentuh, bukan fungsi tombol tersendiri — pemetaannya dilakukan di userspace
+lewat `ts_vkeys`, persis seperti `mi8916`.
+
+---
+
 ## Chip I²C: yang ada vs yang cuma tertulis di DT
 
 Ini temuan paling berharga dari pembacaan device. DTS downstream mendaftarkan **semua**
@@ -130,8 +188,9 @@ Dua di antaranya penting:
 ```
 
 Adanya `synaptics-s3203-kpd` sebagai input device terpisah menunjukkan tombol kapasitif
-dilaporkan oleh kontroler sentuh, bukan lewat GPIO. Di mainline itu ditangani fungsi RMI4
-F1A — karena itu DTS menyertakan node `rmi4-f1a@1a`.
+dilaporkan oleh kontroler sentuh, bukan lewat GPIO. Pembacaan PDT di atas memperjelas
+caranya: bukan lewat fungsi F1A, melainkan dari strip sentuh Y 1745–1900 di bawah layar
+yang disintesis driver jadi tombol.
 
 ---
 

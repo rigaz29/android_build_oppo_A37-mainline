@@ -43,12 +43,16 @@ LineageOS, dan sudah ada target yang benar-benar boot — `mi8916` (Xiaomi Redmi
 
 ## Temuan yang menentukan kelayakan
 
-**1. Touchscreen-nya Synaptics, bukan Goodix.** Ini pertaruhan terbesar proyek ini dan
-hasilnya bagus. A37f memakai **Synaptics S3203** di i2c 0x20 — kontroler RMI4, dan
-`drivers/input/rmi4` di mainline sudah lengkap (f01/f11/f12/f1a/f34/f54). Lebih dari itu,
-`msm8916-longcheer-l8150.dts` yang sudah ada di kernel mainline punya node `rmi4@20` dengan
-**alamat i2c, GPIO interrupt (13), dan vio-supply (pm8916_l6) yang sama persis**. Praktis
-tinggal salin dan ganti `vdd-supply` ke `pm8916_l17`.
+**1. Touchscreen-nya Synaptics, bukan Goodix — dan chipnya sendiri yang mengonfirmasi.**
+Ini pertaruhan terbesar proyek ini. A37f memakai **Synaptics S3203** di i2c 0x20, dan
+Page Description Table-nya dibaca langsung lewat `i2cget`: F34, F01, F11. Query F01
+mengeja `s3203_` dalam ASCII. **Chip menjawab lewat protokol RMI4**, jadi dukungan
+`drivers/input/rmi4` bukan asumsi tapi hasil pengukuran.
+
+`msm8916-longcheer-l8150.dts` yang jadi rujukan punya node `rmi4@20` dengan alamat i2c,
+GPIO interrupt (13), dan vio-supply (pm8916_l6) yang sama persis. Satu perbedaan yang
+hanya ketahuan dari pembacaan chip: A37f memakai fungsi sensor **F11**, sedangkan l8150
+memakai F12.
 
 Bandingkan dengan nasib target SDM439 di repo resmi, yang README-nya menulis "almost all
 of the touchscreen variants aren't supported in the kernel yet. You'll have to interact
@@ -98,7 +102,7 @@ hari ini:
 |---|---|
 | Riset kelayakan | selesai |
 | Inventaris hardware | selesai, diverifikasi di perangkat |
-| DTS kernel | draf ditulis, label eksternal diverifikasi, **belum dikompilasi** |
+| DTS kernel | draf ditulis, label eksternal diverifikasi, node touchscreen dikoreksi ke F11 dari pembacaan chip — **belum dikompilasi** |
 | Entri lk2nd | **dibangun dan dirilis**, isi DTB + tabel QCDT diverifikasi — belum di-flash |
 | Local manifest | ditulis, keberadaan semua repo diverifikasi |
 | Device tree Android | belum dibuat (Fase 9) |

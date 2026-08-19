@@ -105,21 +105,26 @@ fastboot reboot
 **Jalan pulang:** `fastboot flash boot boot-22.2.img` mengembalikan ROM lama. lk2nd hanya
 menempati partisi `boot` dan tidak menyentuh apa pun yang lain.
 
-## Yang harus diperiksa saat boot pertama
+## Pertanyaan terbuka sebelumnya: sudah terjawab
 
-Satu hal masih belum bisa dipastikan tanpa menyalakannya, karena butuh akses root untuk
-membaca `/proc/cmdline`: apakah bootloader OPPO mengoper parameter `mdss_mdp.panel=`.
+Sebelumnya belum bisa dipastikan apakah bootloader OPPO mengoper parameter
+`mdss_mdp.panel=` — dan `lk2nd,match-panel` bergantung penuh pada itu. Dengan `adb root`
+(build `userdebug`, tidak perlu `su`), `/proc/cmdline` terbaca:
 
-`lk2nd,match-panel` bergantung pada parameter itu. Kalau ternyata tidak dioper, lk2nd akan
-boot dengan benar tapi **tidak mengenali perangkat sebagai A37**.
+```
+mdss_mdp.panel=1:dsi:0:qcom,mdss_dsi_oppo15399boe_ili9881c_720p_video:1:none
+```
 
-Yang perlu dilihat di layar atau log lk2nd:
+Nama nodenya **persis sama** dengan yang tercantum di node panel entri lk2nd. Jadi
+`match-panel` punya bahan untuk bekerja, dan tidak perlu pindah ke `match-cmdline`.
 
-1. Apakah tertulis "OPPO A37" — kalau ya, `match-panel` bekerja dan tidak ada yang perlu
-   diubah
-2. Kalau tidak, baca cmdline yang dicetak lk2nd, cari string yang khas A37, lalu ganti
-   `lk2nd,match-panel` dengan `lk2nd,match-cmdline = "*<string itu>*"` — persis seperti yang
-   dilakukan entri `asus-z010d` di berkas yang sama
+Bonus dari cmdline yang sama: bootloader sudah menyiapkan wilayah ramoops di
+`0x9ff00000` (4 MB, console 1 MB). Berguna di Fase 3 — kalau kernel mainline mati sebelum
+sempat bicara, log terakhirnya bisa diambil lewat `lk2nd.pass-ramoops`.
 
-Kandidat yang sudah terlihat dari properti Android (`androidboot.*` yang sampai ke init):
-`androidboot.startupmode=`, `androidboot.baseband=msm`, `androidboot.emmc=true`.
+## Yang tetap harus diperiksa saat boot pertama
+
+1. Layar atau log lk2nd menampilkan **"OPPO A37"**
+2. `fastboot devices` mengenali perangkat saat berada di lk2nd
+3. Kalau ternyata tetap tidak dikenali sebagai A37 meski parameter panelnya ada, catat
+   cmdline yang dicetak lk2nd dan bandingkan dengan yang di atas

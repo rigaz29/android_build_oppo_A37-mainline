@@ -110,10 +110,9 @@ dibedakan saat runtime — pola yang sudah dipakai Marshall London, Vodafone Sma
 dan dua perangkat Asus di berkas yang sama. Rincian dan cara verifikasinya di
 [`lk2nd/README.md`](lk2nd/README.md).
 
-**Yang masih terbuka:** `lk2nd,match-panel` bergantung pada parameter `mdss_mdp.panel=`
-dari bootloader, dan itu tidak bisa dipastikan tanpa root (`/proc/cmdline` ditolak). Kalau
-ternyata tidak dioper, lk2nd tetap boot tapi tidak mengenali perangkat sebagai A37 —
-tinggal ganti ke `lk2nd,match-cmdline`.
+**Mekanisme pencocokannya sudah dikonfirmasi.** `lk2nd,match-panel` bergantung pada
+parameter `mdss_mdp.panel=` dari bootloader; dengan `adb root`, `/proc/cmdline` menunjukkan
+parameter itu memang dioper dan nama nodenya persis sama dengan yang ada di entri lk2nd.
 
 **Kriteria lulus:** perangkat boot ke lk2nd, `fastboot devices` mengenalinya, dan layar
 atau log lk2nd menampilkan "OPPO A37".
@@ -216,7 +215,7 @@ Empat-empatnya sudah ditulis di DTS dan seharusnya jalan tanpa kode baru:
 
 | Bagian | Node | Yang perlu dicek |
 |---|---|---|
-| Touchscreen | `syna,rmi4-i2c` @0x20 | Titik sentuh terbaca; `rmi4-f1a` menghasilkan tiga tombol kapasitif |
+| Touchscreen | `syna,rmi4-i2c` @0x20, fungsi **F11** | Titik sentuh terbaca. Tombol kapasitif ada di strip Y 1745–1900 di luar area layar — pemetaannya lewat `ts_vkeys` di Fase 9, bukan di kernel |
 | Tombol volume | `gpio-keys` TLMM 107/108 | Kalau volume-down mati, tukar ke `&pm8916_resin` |
 | Kartu SD | `sdhc_2`, `cd-gpios` GPIO 38 | Deteksi kartu masuk/keluar |
 | Baterai + charger | `ti,bq24196` @0x6b | Persentase masuk akal; pengisian jalan |

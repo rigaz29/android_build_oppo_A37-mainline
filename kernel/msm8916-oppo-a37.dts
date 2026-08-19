@@ -23,6 +23,12 @@
  *     4-006b bq24196  5-0020 synaptics-s3203   5-0038 lm3630_bl   6-0060 ts4621
  *   i2c yang dideklarasikan DT tapi chip-nya TIDAK ada:
  *     ak8963, kxtj9, yas533, stk3x1x, mpu6050, ncp6335d, nfc-nci
+ *
+ * Dengan akses root, /proc/cmdline mengonfirmasi panel yang dipilih
+ * bootloader (serial diredaksi):
+ *   mdss_mdp.panel=1:dsi:0:qcom,mdss_dsi_oppo15399boe_ili9881c_720p_video:1:none
+ *   ramoops.mem_address=0x9ff00000 ramoops.mem_size=0x400000
+ *   lk_version=V1.0  androidboot.startupmode=pwrkey  inside_ldo
  */
 
 /dts-v1/;
@@ -256,10 +262,26 @@
 	status = "okay";
 
 	/*
-	 * Synaptics S3203. Node ini praktis identik dengan
-	 * msm8916-longcheer-l8150.dts: alamat i2c, GPIO interrupt, dan
-	 * vio-supply-nya sama persis. Yang berbeda hanya vdd-supply
-	 * (l8150 pakai LDO eksternal, A37 pakai pm8916_l17 langsung).
+	 * Synaptics S3203, diverifikasi dengan membaca chip-nya langsung lewat
+	 * i2cget di perangkat (18 Agt 2026). Page Description Table halaman 0:
+	 *
+	 *   0xE9  F34  query 0x87  ctrl 0x4d           flash / firmware update
+	 *   0xE3  F01  query 0x90  ctrl 0x51 data 0x13 device control
+	 *   0xDD  F11  query 0xad  ctrl 0x57 data 0x15 sensor 2D
+	 *   0xD7  0x00                                 akhir PDT
+	 *
+	 * F01 query byte 11-16 mengeja "s3203_" dalam ASCII — chip menjawab
+	 * lewat protokol RMI4, jadi ini bukan lagi asumsi.
+	 *
+	 * CATATAN: fungsi sensornya F11, BUKAN F12 seperti pada
+	 * msm8916-longcheer-l8150.dts. Karena itu properti `syna,no-pressure`
+	 * tidak dipakai di sini — itu hanya dibaca rmi_f12.c.
+	 *
+	 * F11 Ctrl6-9 melaporkan sensor maksimum 1100 x 1900, sementara DTS
+	 * downstream menyebut area panel 1100 x 1745. Selisih Y 1745..1900 itu
+	 * strip tiga tombol kapasitif di bawah layar — sebabnya tidak ada F1A di
+	 * PDT, dan tombolnya harus dipetakan di userspace (ts_vkeys di device tree
+	 * Android, persis seperti mi8916).
 	 */
 	touchscreen@20 {
 		compatible = "syna,rmi4-i2c";
@@ -283,22 +305,17 @@
 			syna,nosleep-mode = <1>;
 		};
 
-		rmi4-f12@12 {
-			reg = <0x12>;
+		rmi4-f11@11 {
+			reg = <0x11>;
 			syna,sensor-type = <1>; /* Touchscreen */
-			syna,no-pressure;
-		};
 
-		/*
-		 * A37 punya tiga tombol kapasitif di bawah layar. Di kernel downstream
-		 * tombol-tombol itu muncul sebagai input device terpisah
-		 * ("synaptics-s3203-kpd"), jadi kontrolernya memang melaporkannya
-		 * sendiri lewat fungsi F1A. Kalau ternyata chip tidak punya F1A, node
-		 * ini diabaikan begitu saja oleh driver RMI4 (fungsi dienumerasi dari
-		 * PDT), jadi aman dibiarkan.
-		 */
-		rmi4-f1a@1a {
-			reg = <0x1a>;
+			/*
+			 * Layar 62 x 110 mm (qcom,mdss-pan-physical-*-dimension).
+			 * Sensor menjangkau lebih jauh ke bawah sampai strip tombol:
+			 * 110 mm x 1900 / 1745 = 120 mm.
+			 */
+			touchscreen-x-mm = <62>;
+			touchscreen-y-mm = <120>;
 		};
 	};
 
