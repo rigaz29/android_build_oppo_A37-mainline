@@ -215,6 +215,39 @@ pinctrl: touchscreen IRQ 13, panel reset 25, panel enable 97, backlight enable 9
 LM3630 HWEN 69, charger IRQ 62, volume up/down 107/108, SD card-detect 38, proximity
 IRQ 113.
 
+### Label GPIO dari perangkat
+
+`/sys/kernel/debug/gpio` menampilkan label yang diberikan driver, jadi ini bukti terkuat
+untuk memastikan tiap pin. Basis TLMM = 902.
+
+| TLMM | Label di perangkat | Arah | Dipakai DTS mainline sebagai |
+|---|---|---|---|
+| 13 | `rmi4_irq_gpio` | in | interrupt touchscreen |
+| 25 | `disp_rst_n` | — | `reset-gpios` panel |
+| 34 | (tidak diminta) | — | INT1 LIS3DH, dibiarkan mati |
+| 38 | `7864900.sdhci cd` | in | `cd-gpios` kartu SD |
+| 69 | `backlight_enable` | out hi | `enable-gpios` LM3630 |
+| 97 | `disp_enable` | — | regulator `reg_panel_vdd` |
+| 98 | `bklt_enable` | — | regulator `reg_bl_vdd` |
+| 107 | `volume_up` | in | `gpio-keys` |
+| 108 | `volume_down` | in | `gpio-keys` |
+| 109 / 114 / 119 | `TP_ID1/2/3` | in | ID panel + touchscreen |
+| 110 | `USB_ID_GPIO` | in | OTG (belum diaktifkan) |
+| 113 | `apds_irq` | in | interrupt proximity |
+| 116 | `sdcard_vdd_enable` | out lo | regulator `reg_sd_vdd` |
+| 118 | `YDA_BOOST` | out lo | boost amplifier speaker |
+| 120 | `YDA_GPIO` | out lo | enable amplifier speaker |
+| 16, 17, 106, 86, 111, 50–52 | `HW_ID*`, `SUB_HW_ID*`, `pcb_ver_flag*` | in | identifikasi varian papan, tidak dipakai |
+
+**GPIO panel hanya muncul saat layar menyala.** Downstream mdss melepas `disp_rst_n`,
+`disp_enable`, dan `bklt_enable` ketika panel dimatikan, jadi pembacaan pertama (layar
+mati) sempat terlihat seolah ketiganya tidak terpakai. Setelah layar dinyalakan,
+ketiganya muncul dengan label di atas — cocok persis dengan yang dimodelkan di DTS.
+
+**GPIO 116 terselesaikan.** Berkas pinctrl menamainya `ext_buck_vsel` (sisa desain NCP6335D
+yang chipnya tidak terpasang), tapi perangkat menamainya `sdcard_vdd_enable`. Yang kedua
+yang berlaku.
+
 ### Yang benar-benar aktif, menurut `/proc/interrupts`
 
 ```
@@ -310,11 +343,26 @@ seluruh ruang alamat:
 
 Yaitu keadaan diam saat tidak ada yang diputar.
 
+Amplifier ini juga punya dua jalur kendali GPIO, dari `msm8916-audio-internal_codec.dtsi`:
+
+```
+spk-pa-en       = <&msm_gpio 120 0x00>;   // enable amplifier
+yda145_boost-en = <&msm_gpio 118 0x00>;   // enable boost
+```
+
+Namanya menyebut **Yamaha YDA145**, tapi yang benar-benar terpasang adalah TS4621 —
+drivernya ter-bind dan chipnya menjawab di bus, sementara YDA145 tidak punya jejak di i2c.
+Pola yang sama dengan sensor: OPPO menuliskan semua varian pemasok, hanya satu yang
+dipasang. Kedua GPIO terbaca `out lo` saat tidak ada audio.
+
 **Konsekuensi untuk Fase 7:** mainline belum punya driver `ts4621`. Jalur earpiece dan
-headset lewat codec PMIC (`pm8916_codec` + `q6*`) seharusnya tetap jalan, tapi
-**speaker kemungkinan besar bisu** sampai amplifier ini diberi driver. Ini bukan
-`simple-audio-amplifier` yang cukup di-enable lewat GPIO — gain dan mute-nya diatur lewat
-register I²C, jadi perlu driver codec sungguhan.
+headset lewat codec PMIC (`pm8916_codec` + `q6*`) seharusnya tetap jalan.
+
+Untuk speaker, langkah pertama yang layak dicoba adalah `simple-audio-amplifier` dengan
+`enable-gpios` ke GPIO 120 plus regulator tetap untuk boost di GPIO 118 — jauh lebih murah
+daripada langsung menulis driver codec. Register `0x01` TS4621 punya bit "I2C disable",
+yang menyiratkan ada mode gain tetap tanpa kendali I²C. Kalau ternyata chip tetap terkunci
+mute, barulah perlu driver codec sungguhan.
 
 ---
 

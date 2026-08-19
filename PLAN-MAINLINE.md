@@ -33,7 +33,7 @@ tidak ada satu pun perangkat msm8916 mainline yang punya fitur-fitur ini hari in
 | Deep sleep | **dimatikan** | `TARGET_SUPPORTS_SUSPEND := false` di device tree rujukan; layar mati tetap boros |
 | SELinux enforcing | **tidak** | Stack mainline masih `androidboot.selinux=permissive` |
 | Magnetometer, sensor cahaya, proximity | **tidak ada** | Chip di A37f (MMC3416x, APDS9921) belum punya driver mainline — lihat Fase 9 |
-| Speaker | **perlu driver baru** | Amplifier eksternal TS4621 dikontrol lewat register I²C; downstream punya drivernya, mainline belum. Headset dan earpiece tidak terpengaruh |
+| Speaker | **perlu kerja tambahan** | Amplifier eksternal TS4621 (enable GPIO 120, boost GPIO 118). Coba `simple-audio-amplifier` dulu; kalau gagal perlu port driver codec. Headset dan earpiece tidak terpengaruh |
 
 Karena itu: **jangan buang ROM 22.2 yang sudah jalan.** Ini proyek paralel, bukan pengganti.
 
@@ -242,10 +242,12 @@ konfigurasi:
 - **Bluetooth:** `btqca`. Alamat MAC diambil dari `persist` lewat tool `bdaddr`.
 - **Audio:** `q6*` (ADSP lewat APR) + `snd_soc_apq8016_sbc`. Butuh berkas UCM ALSA;
   salin dari perangkat msm8916 sejenis di `msm8916-mainline/alsa-ucm-conf` lalu sesuaikan.
-  **Speaker butuh kerja tambahan:** A37f punya amplifier eksternal TS4621 di i2c-6 0x60
-  yang gain dan mute-nya diatur lewat register I²C. Kernel downstream punya drivernya
-  (`sound/soc/codecs/ts4621.c`, 580 baris), mainline belum. Earpiece dan headset lewat
-  codec PMIC seharusnya jalan lebih dulu.
+  **Speaker butuh kerja tambahan.** A37f punya amplifier eksternal TS4621 di i2c-6 0x60,
+  dengan enable di GPIO 120 (`spk-pa-en`) dan boost di GPIO 118 (`yda145_boost-en`).
+  Coba dulu `simple-audio-amplifier` pada GPIO 120 + regulator tetap untuk GPIO 118 —
+  jauh lebih murah daripada menulis driver codec. Kalau chip tetap terkunci mute, barulah
+  port `sound/soc/codecs/ts4621.c` (580 baris) dari kernel downstream. Earpiece dan headset
+  lewat codec PMIC tidak terpengaruh dan seharusnya jalan lebih dulu.
 
 **Kriteria lulus:** tersambung Wi-Fi, suara keluar dari headset. Speaker menyusul setelah
 driver TS4621 ada.

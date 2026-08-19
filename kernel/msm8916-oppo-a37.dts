@@ -113,7 +113,12 @@
 		};
 	};
 
-	/* qcom,platform-enable-gpio dari node mdss_dsi0 downstream */
+	/*
+	 * qcom,platform-enable-gpio dari node mdss_dsi0 downstream.
+	 * Dikonfirmasi di perangkat: dengan layar menyala, /sys/kernel/debug/gpio
+	 * menampilkan TLMM 97 dengan label `disp_enable`. (Saat layar mati, mdss
+	 * melepas GPIO panel, jadi ketiganya menghilang dari daftar.)
+	 */
 	reg_panel_vdd: regulator-panel-vdd {
 		compatible = "regulator-fixed";
 		regulator-name = "panel_vdd";
@@ -131,6 +136,8 @@
 	/*
 	 * qcom,platform-bklight-en-gpio — saklar daya untuk rangkaian backlight.
 	 * Driver lm3630a tidak meminta supply apa pun, jadi dipaksa always-on.
+	 * Dikonfirmasi di perangkat sebagai `bklt_enable` (TLMM 98); LM3630 HWEN
+	 * sendiri muncul terpisah sebagai `backlight_enable` (TLMM 69, out hi).
 	 */
 	reg_bl_vdd: regulator-bl-vdd {
 		compatible = "regulator-fixed";
@@ -309,6 +316,7 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 
+		/* di perangkat GPIO ini berlabel `rmi4_irq_gpio` */
 		interrupt-parent = <&tlmm>;
 		interrupts = <13 IRQ_TYPE_EDGE_FALLING>;
 
@@ -403,6 +411,7 @@
 
 		backlight = <&backlight>;
 		power-supply = <&reg_panel_vdd>;
+		/* dikonfirmasi di perangkat sebagai `disp_rst_n` */
 		reset-gpios = <&tlmm 25 GPIO_ACTIVE_LOW>;
 
 		port {
@@ -472,6 +481,22 @@
 	pinctrl-0 = <&sdc2_default &sdc2_cd_default>;
 	pinctrl-1 = <&sdc2_sleep &sdc2_cd_default>;
 };
+
+/*
+ * Speaker A37f lewat amplifier eksternal yang butuh tiga hal:
+ *   GPIO 120  spk-pa-en        enable amplifier
+ *   GPIO 118  yda145_boost-en  enable boost
+ *   i2c-6 0x60 TS4621          gain + mute lewat register I2C
+ *
+ * Nama GPIO-nya menyebut Yamaha YDA145, tapi yang benar-benar terpasang adalah
+ * TS4621 (drivernya ter-bind, chipnya menjawab di bus) — YDA145 kemungkinan
+ * varian pemasok lain, pola yang sama dengan sensor.
+ *
+ * Belum diaktifkan di sini. Langkah pertama yang layak dicoba di Fase 7 adalah
+ * `simple-audio-amplifier` dengan enable-gpios ke GPIO 120 plus regulator tetap
+ * untuk boost di GPIO 118. Kalau ternyata tetap bisu karena chip terkunci di
+ * keadaan mute, barulah perlu driver codec TS4621 sungguhan.
+ */
 
 &sound {
 	audio-routing =
