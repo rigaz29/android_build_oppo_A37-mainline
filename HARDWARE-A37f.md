@@ -146,7 +146,7 @@ menyimpulkan apa yang terpasang. Yang menentukan adalah driver mana yang berhasi
 | `4-006b` | bq24196-charger | TI BQ24196, charger | **ada** — `ti,bq24196` |
 | `5-0020` | synaptics-s3203 | Synaptics S3203, touchscreen | **ada** — `syna,rmi4-i2c` |
 | `5-0038` | lm3630_bl | TI LM3630, backlight | **ada** — `ti,lm3630a` |
-| `6-0060` | ts4621 | ST TS4621, fungsi belum teridentifikasi | — |
+| `6-0060` | ts4621 | **Amplifier speaker eksternal** (class-D, dikontrol I²C) | **belum ada** |
 
 ### Tertulis di DT tapi chip tidak ada
 
@@ -169,7 +169,7 @@ Dua di antaranya penting:
 | `i2c-1` | BLSP1 QUP1 `78b5000` | (kosong — ncp6335d tidak ada) |
 | `i2c-4` | BLSP1 QUP4 `78b8000` | charger BQ24196 |
 | `i2c-5` | BLSP1 QUP5 `78b9000` | touchscreen + backlight |
-| `i2c-6` | BLSP1 QUP6 `78ba000` | ts4621 |
+| `i2c-6` | BLSP1 QUP6 `78ba000` | amplifier speaker TS4621 |
 
 ---
 
@@ -277,6 +277,44 @@ Tabel OCV 31 titik di DTS dikonversi dari `qcom,pc-temp-ocv-lut` kolom 25 °C pa
 `batterydata-oppo-4v4-2550mah-high-ATL.dtsi`. Satu titik non-monotonik pada 8 %
 (3694 mV, lebih tinggi dari titik 9 %) dikoreksi manual jadi 3691 mV supaya
 `simple-battery` menerimanya.
+
+---
+
+## Amplifier speaker TS4621
+
+Chip terakhir yang belum teridentifikasi ternyata penting. Drivernya ada di kernel
+downstream sebagai **codec ASoC**, bukan driver misc:
+
+```
+sound/soc/codecs/ts4621.c    580 baris
+```
+
+Isinya memastikan fungsinya — amplifier speaker yang dikontrol lewat I²C:
+
+```c
+ts4621_reg_write(0x01, 0x01);  // path disable and I2C disable
+ts4621_reg_write(0x02, 0xC0);  // mute and set volume -64dB
+cTemp = cValue | 0xc0;         // path enable
+static int DEFAULT_GAIN = 0x38;
+```
+
+Dump register dari perangkat cocok dengan itu — hanya 4 register yang berulang di
+seluruh ruang alamat:
+
+```
+00: 40 01 c0 00 40 01 c0 00 ...
+       ^  ^
+       |  +-- reg 0x02 = 0xc0, mute
+       +----- reg 0x01 = 0x01, path disable
+```
+
+Yaitu keadaan diam saat tidak ada yang diputar.
+
+**Konsekuensi untuk Fase 7:** mainline belum punya driver `ts4621`. Jalur earpiece dan
+headset lewat codec PMIC (`pm8916_codec` + `q6*`) seharusnya tetap jalan, tapi
+**speaker kemungkinan besar bisu** sampai amplifier ini diberi driver. Ini bukan
+`simple-audio-amplifier` yang cukup di-enable lewat GPIO — gain dan mute-nya diatur lewat
+register I²C, jadi perlu driver codec sungguhan.
 
 ---
 
